@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#05070d" />
+    <meta
+      name="description"
+      content="Photon PXL is a forensic 3D landing page and browser camera-processing lab that reconstructs the supplied photon aesthetic with tone curves, color science, grain, bloom, JPEG simulation, and timestamp overlays."
+    />
+    <title>Photon PXL — Forensic Camera Aesthetic Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@500;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="grain veil" aria-hidden="true"></div>
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Photon PXL home">
+        <span class="brand-mark">PXL</span>
+        <span class="brand-copy">
+          <strong>Photon PXL</strong>
+          <small>forensic camera engine</small>
+        </span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#engine">Engine</a>
+        <a href="#lab">Live lab</a>
+        <a href="#pipeline">Pipeline</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero section-shell">
+        <div class="hero-copy">
+          <p class="eyebrow">Rare niche 3D × computational photography</p>
+          <h1>
+            A photon-crushed camera look, rebuilt as an interactive browser
+            instrument.
+          </h1>
+          <p class="lede">
+            This landing page is not a disposable-camera preset. It is a
+            forensic reconstruction of the supplied references: cyan shadows,
+            yellowed greens, crushed blacks, sharpened low-resolution detail,
+            ordered sensor texture, bloom discipline, JPEG scars, and the exact
+            two-line timestamp ritual.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#lab">Open the photon lab</a>
+            <a class="button ghost" href="#pipeline">Read the mechanism</a>
+          </div>
+          <dl class="metric-strip" aria-label="Reconstruction parameters">
+            <div>
+              <dt>Black point</dt>
+              <dd>0.045</dd>
+            </div>
+            <div>
+              <dt>Blue bias</dt>
+              <dd>+14%</dd>
+            </div>
+            <div>
+              <dt>Noise σ</dt>
+              <dd>17px</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="hero-stage" aria-label="Three-dimensional photon camera sculpture">
+          <div class="camera-rig" id="cameraRig">
+            <div class="phone-frame">
+              <div class="scanline"></div>
+              <canvas id="demoCanvas" width="410" height="547"></canvas>
+              <div class="timestamp-float">
+                <span>05 16 2026 19:41:50</span>
+                <span>3Y 66D 13:18:10</span>
+              </div>
+            </div>
+            <div class="lens-stack">
+              <span class="lens-ring ring-1"></span>
+              <span class="lens-ring ring-2"></span>
+              <span class="lens-ring ring-3"></span>
+              <span class="lens-core"></span>
+            </div>
+            <div class="photon-ribbon ribbon-a"></div>
+            <div class="photon-ribbon ribbon-b"></div>
+            <div class="photon-ribbon ribbon-c"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-shell thesis" id="engine">
+        <p class="eyebrow">What the engine actually does</p>
+        <div class="thesis-grid">
+          <article>
+            <span class="card-index">01</span>
+            <h2>Color science with intent</h2>
+            <p>
+              The engine cools the white balance, pushes shadows toward cyan,
+              remaps blues toward teal, bends greens toward olive-yellow, and
+              keeps red/orange objects unnaturally alive.
+            </p>
+          </article>
+          <article>
+            <span class="card-index">02</span>
+            <h2>Tone curve before texture</h2>
+            <p>
+              A hard black/white point remap and steep S-curve create dense
+              silhouettes before the synthetic sensor field is injected back
+              into the image.
+            </p>
+          </article>
+          <article>
+            <span class="card-index">03</span>
+            <h2>Digital damage, not nostalgia</h2>
+            <p>
+              Low internal resolution, unsharp halos, RGB/luma speckle, Bayer
+              dither, bloom restraint, and JPEG quantization make the output
+              feel like an app-specific camera pipeline rather than film.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="lab section-shell" id="lab">
+        <div class="lab-copy">
+          <p class="eyebrow">Live browser implementation</p>
+          <h2>Drop in an image. The photon mechanism runs locally.</h2>
+          <p>
+            Use the controls to stress the forensic parameters. Processing uses
+            Canvas ImageData, deterministic grain, HSL hue remapping, a shaped
+            tone LUT, ordered dither, bloom, unsharp masking, and a timestamp
+            compositor.
+          </p>
+          <label class="file-drop" for="imageInput">
+            <input id="imageInput" type="file" accept="image/*" />
+            <span>Upload test image</span>
+            <small>PNG, JPG, HEIC-converted browser inputs</small>
+          </label>
+        </div>
+
+        <div class="lab-panel">
+          <div class="preview-toolbar">
+            <strong>Before / photon output</strong>
+            <button id="downloadButton" type="button">Download JPEG</button>
+          </div>
+          <div class="canvas-compare" aria-label="Source image and filtered photon output comparison">
+            <figure>
+              <canvas id="sourceCanvas" width="410" height="547"></canvas>
+              <figcaption>Input crop</figcaption>
+            </figure>
+            <figure>
+              <canvas id="outputCanvas" width="410" height="547"></canvas>
+              <figcaption>Full photon pipeline</figcaption>
+            </figure>
+          </div>
+          <div class="signature-panel" aria-live="polite">
+            <div>
+              <span class="eyebrow">Automated image comparison</span>
+              <strong id="signatureVerdict">Waiting for render…</strong>
+            </div>
+            <ul id="signatureReport"></ul>
+          </div>
+          <div class="control-grid">
+            <label>
+              Contrast
+              <input id="contrastControl" type="range" min="1" max="1.8" step="0.01" value="1.38" />
+            </label>
+            <label>
+              Grain
+              <input id="grainControl" type="range" min="0" max="32" step="1" value="17" />
+            </label>
+            <label>
+              Cyan shadow
+              <input id="cyanControl" type="range" min="0" max="0.16" step="0.005" value="0.075" />
+            </label>
+            <label>
+              Dither
+              <input id="ditherControl" type="range" min="0" max="14" step="1" value="7" />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="pipeline section-shell" id="pipeline">
+        <p class="eyebrow">Exact processing order</p>
+        <h2>The mechanism of the photon engine</h2>
+        <ol class="pipeline-list">
+          <li><span>Crop</span>Center crop to a 3:4 vertical frame.</li>
+          <li><span>Resolve</span>Downscale to a low internal canvas for cheap sensor detail.</li>
+          <li><span>Tone</span>Exposure, black point, white point, gamma, and S-curve.</li>
+          <li><span>Color</span>Cool matrix, cyan shadows, hue-selective remapping.</li>
+          <li><span>Optics</span>Subtle bloom, vignette, and controlled local contrast.</li>
+          <li><span>Damage</span>Unsharp mask, RGB/luma noise, Bayer dither, JPEG export.</li>
+          <li><span>Metadata</span>Hard white two-line monospaced timestamp with black edge.</li>
+        </ol>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Photon PXL forensic reconstruction engine — built for exact aesthetic study.</p>
+      <a href="#top">Back to top</a>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
