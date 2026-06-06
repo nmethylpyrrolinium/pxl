@@ -140,6 +140,7 @@
           </p>
           <label class="file-drop" for="imageInput">
             <input id="imageInput" type="file" accept="image/*" capture="environment" />
+            <input id="imageInput" type="file" accept="image/*" />
             <span>Upload test image</span>
             <small>PNG, JPG, HEIC-converted browser inputs</small>
           </label>
@@ -199,6 +200,24 @@
           <article><span>02 / FIELD</span><h3>Deterministic sensor scars</h3><p>Seeded dust, periodic scan fields, and high-frequency damage remain repeatable for real visual regression.</p></article>
           <article><span>03 / HEAT</span><h3>Spatial light contamination</h3><p>A shaped orange-red leak reacts across the frame while keeping the reference pipeline underneath intact.</p></article>
           <article><span>04 / SHEET</span><h3>Instant art-direction contact sheet</h3><p>Render four complete recipes from one source, then compare treatment families without rebuilding them manually.</p></article>
+          <div class="control-grid">
+            <label>
+              Contrast
+              <input id="contrastControl" type="range" min="1" max="1.8" step="0.01" value="1.38" />
+            </label>
+            <label>
+              Grain
+              <input id="grainControl" type="range" min="0" max="32" step="1" value="17" />
+            </label>
+            <label>
+              Cyan shadow
+              <input id="cyanControl" type="range" min="0" max="0.16" step="0.005" value="0.075" />
+            </label>
+            <label>
+              Dither
+              <input id="ditherControl" type="range" min="0" max="14" step="1" value="7" />
+            </label>
+          </div>
         </div>
       </section>
 
@@ -212,6 +231,8 @@
           <li><span>Color</span>Cool matrix, cyan shadows, hue-selective remapping.</li>
           <li><span>Optics</span>Subtle bloom, vignette, radial prism split, and spatial heat leak.</li>
           <li><span>Damage</span>Unsharp mask, RGB/luma noise, Bayer dither, scan field, sensor dust, and JPEG export.</li>
+          <li><span>Optics</span>Subtle bloom, vignette, and controlled local contrast.</li>
+          <li><span>Damage</span>Unsharp mask, RGB/luma noise, Bayer dither, JPEG export.</li>
           <li><span>Metadata</span>Hard white two-line monospaced timestamp with black edge.</li>
         </ol>
       </section>

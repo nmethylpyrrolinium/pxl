@@ -586,6 +586,7 @@ function initialize() {
   renderAll();
 
   ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl'].forEach((id) => {
+  ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl'].forEach((id) => {
     document.getElementById(id)?.addEventListener('input', () => {
       renderSourceToCanvas(activeSource, outputCanvas, currentParams(), 20260516);
       updateSignatureReport(sourcePreviewCanvas, outputCanvas);
