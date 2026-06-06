@@ -1,8 +1,8 @@
 {
-  "name": "photon-pxl",
+  "name": "alams-dump",
   "version": "1.0.0",
   "private": true,
-  "description": "3D landing page and forensic browser camera-processing engine for the Photon PXL aesthetic.",
+  "description": "A private-feeling browser photo lab for damaged digital keepsakes.",
   "scripts": {
     "test": "node --check app.js && node tests/photon-signature.test.js",
     "serve": "python3 -m http.server 4173"
