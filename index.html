@@ -6,9 +6,9 @@
     <meta name="theme-color" content="#05070d" />
     <meta
       name="description"
-      content="Photon PXL is a forensic 3D landing page and browser camera-processing lab that reconstructs the supplied photon aesthetic with tone curves, color science, grain, bloom, JPEG simulation, and timestamp overlays."
+      content="Alam’s Dump is a private-feeling browser photo lab for turning everyday images into damaged digital keepsakes."
     />
-    <title>Photon PXL — Forensic Camera Aesthetic Engine</title>
+    <title>Alam’s Dump — Digital Keepsake Lab</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -23,11 +23,11 @@
     <div class="orb orb-b" aria-hidden="true"></div>
 
     <header class="site-header">
-      <a class="brand" href="#top" aria-label="Photon PXL home">
-        <span class="brand-mark">PXL</span>
+      <a class="brand" href="#top" aria-label="Alam’s Dump home">
+        <span class="brand-mark">A/D</span>
         <span class="brand-copy">
-          <strong>Photon PXL</strong>
-          <small>forensic camera engine</small>
+          <strong>Alam’s Dump</strong>
+          <small>digital keepsake lab</small>
         </span>
       </a>
       <nav aria-label="Primary navigation">
@@ -40,20 +40,15 @@
     <main id="top">
       <section class="hero section-shell">
         <div class="hero-copy">
-          <p class="eyebrow">Rare niche 3D × computational photography</p>
+          <p class="eyebrow">Your camera roll, beautifully wrecked</p>
           <h1>
-            A photon-crushed camera look, rebuilt as an interactive browser
-            instrument.
+            Throw a photo in the dump. Keep the version that feels real.
           </h1>
           <p class="lede">
-            This landing page is not a disposable-camera preset. It is a
-            forensic reconstruction of the supplied references: cyan shadows,
-            yellowed greens, crushed blacks, sharpened low-resolution detail,
-            ordered sensor texture, bloom discipline, JPEG scars, and the exact
-            two-line timestamp ritual.
+            Alam’s Dump turns camera-roll leftovers into digital keepsakes with cyan shadows, crushed blacks, sensor grit, light leaks, and timestamp scars. Everything stays on your device.
           </p>
           <div class="hero-actions">
-            <a class="button primary" href="#lab">Open the photon lab</a>
+            <a class="button primary" href="#lab">Open the dump lab</a>
             <a class="button ghost" href="#pipeline">Read the mechanism</a>
           </div>
           <dl class="metric-strip" aria-label="Reconstruction parameters">
@@ -131,25 +126,35 @@
       <section class="lab section-shell" id="lab">
         <div class="lab-copy">
           <p class="eyebrow">Live browser implementation</p>
-          <h2>Drop in an image. The photon mechanism runs locally.</h2>
+          <h2>Pick a photo. Wreck it locally. Keep the evidence.</h2>
           <p>
             Use the controls to stress the forensic parameters. Processing uses
             Canvas ImageData, deterministic grain, HSL hue remapping, a shaped
             tone LUT, ordered dither, bloom, unsharp masking, and a timestamp
             compositor.
           </p>
-          <label class="file-drop" for="imageInput">
-            <input id="imageInput" type="file" accept="image/*" capture="environment" />
+          <div class="file-drop" id="dropZone">
             <input id="imageInput" type="file" accept="image/*" />
-            <span>Upload test image</span>
-            <small>PNG, JPG, HEIC-converted browser inputs</small>
-          </label>
+            <input id="cameraInput" type="file" accept="image/*" capture="environment" />
+            <span class="drop-kicker">DROP ZONE / PRIVATE BY DEFAULT</span>
+            <strong>Drag a photo here or choose how to add one.</strong>
+            <small>Images are processed in your browser and never uploaded.</small>
+            <div class="upload-actions">
+              <label class="upload-button primary-upload" for="imageInput">Choose from library</label>
+              <label class="upload-button" for="cameraInput">Take a photo</label>
+            </div>
+            <p id="uploadStatus" class="upload-status" role="status" aria-live="polite">Ready for JPG, PNG, WebP, GIF, or browser-supported image files.</p>
+          </div>
         </div>
 
         <div class="lab-panel">
           <div class="preview-toolbar">
             <strong>Before / photon output</strong>
-            <button id="downloadButton" type="button">Download JPEG</button>
+            <div class="output-actions">
+              <button id="remixButton" type="button" title="Generate a fresh deterministic grain pattern">New grain</button>
+              <button id="shareButton" type="button">Share</button>
+              <button id="downloadButton" type="button">Download JPEG</button>
+            </div>
           </div>
           <div class="canvas-compare" aria-label="Source image and filtered photon output comparison">
             <figure>
@@ -200,24 +205,6 @@
           <article><span>02 / FIELD</span><h3>Deterministic sensor scars</h3><p>Seeded dust, periodic scan fields, and high-frequency damage remain repeatable for real visual regression.</p></article>
           <article><span>03 / HEAT</span><h3>Spatial light contamination</h3><p>A shaped orange-red leak reacts across the frame while keeping the reference pipeline underneath intact.</p></article>
           <article><span>04 / SHEET</span><h3>Instant art-direction contact sheet</h3><p>Render four complete recipes from one source, then compare treatment families without rebuilding them manually.</p></article>
-          <div class="control-grid">
-            <label>
-              Contrast
-              <input id="contrastControl" type="range" min="1" max="1.8" step="0.01" value="1.38" />
-            </label>
-            <label>
-              Grain
-              <input id="grainControl" type="range" min="0" max="32" step="1" value="17" />
-            </label>
-            <label>
-              Cyan shadow
-              <input id="cyanControl" type="range" min="0" max="0.16" step="0.005" value="0.075" />
-            </label>
-            <label>
-              Dither
-              <input id="ditherControl" type="range" min="0" max="14" step="1" value="7" />
-            </label>
-          </div>
         </div>
       </section>
 
@@ -231,15 +218,13 @@
           <li><span>Color</span>Cool matrix, cyan shadows, hue-selective remapping.</li>
           <li><span>Optics</span>Subtle bloom, vignette, radial prism split, and spatial heat leak.</li>
           <li><span>Damage</span>Unsharp mask, RGB/luma noise, Bayer dither, scan field, sensor dust, and JPEG export.</li>
-          <li><span>Optics</span>Subtle bloom, vignette, and controlled local contrast.</li>
-          <li><span>Damage</span>Unsharp mask, RGB/luma noise, Bayer dither, JPEG export.</li>
           <li><span>Metadata</span>Hard white two-line monospaced timestamp with black edge.</li>
         </ol>
       </section>
     </main>
 
     <footer class="site-footer">
-      <p>Photon PXL forensic reconstruction engine — built for exact aesthetic study.</p>
+      <p>Alam’s Dump — locally wrecking perfectly good photos since 2026.</p>
       <a href="#top">Back to top</a>
     </footer>
 

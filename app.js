@@ -565,45 +565,93 @@ function currentParams() {
   };
 }
 
+function isSupportedImageFile(file) {
+  return Boolean(file && typeof file.type === 'string' && file.type.startsWith('image/'));
+}
+
 function initialize() {
   const demoCanvas = document.getElementById('demoCanvas');
   const outputCanvas = document.getElementById('outputCanvas');
   const sourcePreviewCanvas = document.getElementById('sourceCanvas');
+  const uploadStatus = document.getElementById('uploadStatus');
+  const dropZone = document.getElementById('dropZone');
   const sourceCanvas = document.createElement('canvas');
   sourceCanvas.width = DEFAULT_PARAMS.outputWidth;
   sourceCanvas.height = DEFAULT_PARAMS.outputHeight;
   makeProceduralScene(sourceCanvas);
 
   let activeSource = sourceCanvas;
+  let renderSeed = 20260516;
+  let activeFileName = 'alams-dump';
+
+  const setStatus = (message, state = '') => {
+    if (!uploadStatus) return;
+    uploadStatus.textContent = message;
+    uploadStatus.dataset.state = state;
+  };
+
+  const renderOutput = () => {
+    renderSourceToCanvas(activeSource, outputCanvas, currentParams(), renderSeed);
+    updateSignatureReport(sourcePreviewCanvas, outputCanvas);
+  };
+
   const renderAll = (source = activeSource) => {
     activeSource = source;
     renderRawPreview(activeSource, sourcePreviewCanvas);
-    renderSourceToCanvas(activeSource, outputCanvas, currentParams(), 20260516);
+    renderOutput();
     renderSourceToCanvas(sourceCanvas, demoCanvas, { ...DEFAULT_PARAMS, lumaNoise: 20, contrast: 1.46 }, 20260404);
-    updateSignatureReport(sourcePreviewCanvas, outputCanvas);
+  };
+
+  const loadImageFile = (file) => {
+    if (!file) return;
+    if (!isSupportedImageFile(file)) {
+      setStatus('That file is not an image. Try a JPG, PNG, WebP, or another browser-supported image.', 'error');
+      return;
+    }
+
+    setStatus(`Developing ${file.name || 'camera photo'}…`, 'loading');
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      activeFileName = (file.name || 'camera-photo').replace(/\.[^.]+$/, '').replace(/[^a-z0-9-_]+/gi, '-').toLowerCase();
+      renderSeed = Math.max(1, Math.floor(file.lastModified || Date.now()) % 2147483647);
+      renderAll(image);
+      setStatus(`${file.name || 'Camera photo'} is in the dump. Adjust it, remix the grain, then save or share.`, 'success');
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      setStatus('This image could not be decoded by your browser. Convert HEIC/RAW files to JPG or PNG and try again.', 'error');
+    };
+    image.src = url;
   };
 
   renderAll();
 
   ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl'].forEach((id) => {
-  ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl'].forEach((id) => {
-    document.getElementById(id)?.addEventListener('input', () => {
-      renderSourceToCanvas(activeSource, outputCanvas, currentParams(), 20260516);
-      updateSignatureReport(sourcePreviewCanvas, outputCanvas);
+    document.getElementById(id)?.addEventListener('input', renderOutput);
+  });
+
+  ['imageInput', 'cameraInput'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', (event) => {
+      loadImageFile(event.target.files?.[0]);
+      event.target.value = '';
     });
   });
 
-  document.getElementById('imageInput')?.addEventListener('change', (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      renderAll(image);
-    };
-    image.src = url;
+  ['dragenter', 'dragover'].forEach((eventName) => {
+    dropZone?.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropZone.classList.add('is-dragging');
+    });
   });
+  ['dragleave', 'drop'].forEach((eventName) => {
+    dropZone?.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropZone.classList.remove('is-dragging');
+    });
+  });
+  dropZone?.addEventListener('drop', (event) => loadImageFile(event.dataTransfer?.files?.[0]));
 
   const presets = {
     reference: {},
@@ -627,9 +675,14 @@ function initialize() {
       };
       Object.entries(mapping).forEach(([id, value]) => { document.getElementById(id).value = value; });
       document.querySelectorAll('[data-preset]').forEach((item) => item.classList.toggle('active', item === button));
-      renderSourceToCanvas(activeSource, outputCanvas, currentParams(), 20260516);
-      updateSignatureReport(sourcePreviewCanvas, outputCanvas);
+      renderOutput();
     });
+  });
+
+  document.getElementById('remixButton')?.addEventListener('click', () => {
+    renderSeed = (renderSeed + 104729) % 2147483647;
+    renderOutput();
+    setStatus('Fresh grain, dust, and sensor scars generated. Same photo, different damage.', 'success');
   });
 
   document.getElementById('contactSheetButton')?.addEventListener('click', () => {
@@ -638,12 +691,11 @@ function initialize() {
     sheet.hidden = false;
     sheetContext.fillStyle = '#05070d';
     sheetContext.fillRect(0, 0, sheet.width, sheet.height);
-    const variants = Object.entries(presets);
-    variants.forEach(([name, overrides], index) => {
+    Object.entries(presets).forEach(([name, overrides], index) => {
       const tile = document.createElement('canvas');
       tile.width = 410;
       tile.height = 547;
-      renderSourceToCanvas(activeSource, tile, { ...DEFAULT_PARAMS, ...overrides }, 20260516 + index * 101);
+      renderSourceToCanvas(activeSource, tile, { ...DEFAULT_PARAMS, ...overrides }, renderSeed + index * 101);
       const x = (index % 2) * 430 + 20;
       const y = Math.floor(index / 2) * 600 + 20;
       sheetContext.drawImage(tile, x, y, 410, 547);
@@ -654,15 +706,32 @@ function initialize() {
     sheet.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
-  document.getElementById('downloadButton')?.addEventListener('click', () => {
-    outputCanvas.toBlob((blob) => {
-      if (!blob) return;
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'photon-pxl-reconstruction.jpg';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 2500);
-    }, 'image/jpeg', DEFAULT_PARAMS.jpegQuality);
+  const outputBlob = () => new Promise((resolve) => outputCanvas.toBlob(resolve, 'image/jpeg', DEFAULT_PARAMS.jpegQuality));
+
+  document.getElementById('downloadButton')?.addEventListener('click', async () => {
+    const blob = await outputBlob();
+    if (!blob) return;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${activeFileName}-dumped.jpg`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 2500);
+  });
+
+  document.getElementById('shareButton')?.addEventListener('click', async () => {
+    const blob = await outputBlob();
+    if (!blob) return;
+    const file = new File([blob], `${activeFileName}-dumped.jpg`, { type: 'image/jpeg' });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Alam’s Dump', text: 'A photo I wrecked in Alam’s Dump.' });
+        setStatus('Dump shared.', 'success');
+      } catch (error) {
+        if (error.name !== 'AbortError') setStatus('Sharing was blocked. Download the JPEG instead.', 'error');
+      }
+    } else {
+      setStatus('File sharing is not supported in this browser. Download the JPEG instead.', 'error');
+    }
   });
 
   const rig = document.getElementById('cameraRig');
@@ -693,6 +762,7 @@ if (typeof module !== 'undefined') {
     unsharpMask,
     imageSignature,
     scoreSignature,
+    isSupportedImageFile,
   };
 }
 

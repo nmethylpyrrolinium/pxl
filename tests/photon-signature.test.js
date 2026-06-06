@@ -6,6 +6,7 @@ const {
   getCrop,
   rgbToHsl,
   scoreSignature,
+  isSupportedImageFile,
   REFERENCE_SIGNATURE,
 } = require('../app.js');
 
@@ -149,6 +150,13 @@ function testAdvancedArtifacts() {
   assert.ok(a.data[rightEdge] >= source.data[rightEdge], 'spatial heat leak should preserve or add red energy near the right edge');
 }
 
+function testImageFileValidation() {
+  assert.equal(isSupportedImageFile({ type: 'image/jpeg' }), true, 'camera JPEGs should be accepted');
+  assert.equal(isSupportedImageFile({ type: 'image/heic' }), true, 'browser-advertised image formats should reach the decoder');
+  assert.equal(isSupportedImageFile({ type: 'application/pdf' }), false, 'non-image files should be rejected');
+  assert.equal(isSupportedImageFile(null), false, 'empty picker results should be ignored');
+}
+
 function testReferenceSignatureContract() {
   const syntheticReferenceLikeSignature = {
     blackCrush: 0.32,
@@ -166,5 +174,6 @@ testCrop();
 testHueRemapping();
 testDeterministicPhotonDamage();
 testAdvancedArtifacts();
+testImageFileValidation();
 testReferenceSignatureContract();
 console.log('photon-signature tests passed');
