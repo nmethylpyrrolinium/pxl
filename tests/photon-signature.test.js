@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const {
   DEFAULT_PARAMS,
   applyPhotonPixels,
+  applyArtifactPixels,
   getCrop,
   rgbToHsl,
   scoreSignature,
@@ -134,6 +135,20 @@ function testDeterministicPhotonDamage() {
   assert.ok(after.saturation > before.saturation, `selective/global saturation should increase: ${before.saturation} -> ${after.saturation}`);
 }
 
+function testAdvancedArtifacts() {
+  const source = makeImageData(24, 18, (x, y, width) => [x === width - 1 ? 250 : 20, 70 + y, x === 0 ? 240 : 35]);
+  const a = cloneImageData(source);
+  const b = cloneImageData(source);
+  const params = { chromaticAberration: 4, scanlineStrength: 0.12, dustStrength: 0.08, lightLeakStrength: 0.25 };
+  applyArtifactPixels(a, params, 777);
+  applyArtifactPixels(b, params, 777);
+  assert.deepEqual(a.data, b.data, 'advanced artifacts must stay deterministic for contact-sheet regeneration');
+  assert.notDeepEqual(a.data, source.data, 'advanced artifact stack must alter the rendered image');
+
+  const rightEdge = ((9 * source.width) + source.width - 1) * 4;
+  assert.ok(a.data[rightEdge] >= source.data[rightEdge], 'spatial heat leak should preserve or add red energy near the right edge');
+}
+
 function testReferenceSignatureContract() {
   const syntheticReferenceLikeSignature = {
     blackCrush: 0.32,
@@ -150,5 +165,6 @@ function testReferenceSignatureContract() {
 testCrop();
 testHueRemapping();
 testDeterministicPhotonDamage();
+testAdvancedArtifacts();
 testReferenceSignatureContract();
 console.log('photon-signature tests passed');

@@ -637,3 +637,228 @@ input[type="range"] {
   .camera-rig { transform: rotateX(50deg) rotateZ(-12deg) scale(0.78); }
   .site-footer { flex-direction: column; }
 }
+
+.preset-rail {
+  display: flex;
+  gap: 0.55rem;
+  margin-top: 1rem;
+  padding-bottom: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+}
+
+.preset-rail button,
+.contact-sheet-tool button {
+  min-height: 2.8rem;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #dce8f7;
+  background: rgba(255, 255, 255, 0.055);
+  cursor: pointer;
+  white-space: nowrap;
+  scroll-snap-align: start;
+}
+
+.preset-rail button.active {
+  border-color: var(--cyan);
+  color: #001019;
+  background: var(--cyan);
+  font-weight: 800;
+}
+
+.contact-sheet-tool {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 216, 106, 0.3);
+  border-radius: 1.25rem;
+  background: rgba(255, 216, 106, 0.06);
+}
+
+.contact-sheet-tool div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.contact-sheet-tool small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.contact-sheet-tool button {
+  border-color: rgba(255, 216, 106, 0.55);
+  color: var(--yellow);
+}
+
+#contactSheetCanvas {
+  width: 100%;
+  margin-top: 1rem;
+  border-radius: 1.25rem;
+  background: #05070d;
+}
+
+.rarities {
+  padding: clamp(4rem, 8vw, 8rem) 0;
+}
+
+.rarities h2 {
+  max-width: 12ch;
+}
+
+.rarity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.rarity-grid article {
+  min-height: 18rem;
+  padding: 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: 1.8rem;
+  background: linear-gradient(145deg, rgba(84, 243, 255, 0.09), rgba(255, 255, 255, 0.025));
+  box-shadow: var(--shadow);
+}
+
+.rarity-grid span {
+  color: var(--cyan);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.13em;
+}
+
+.rarity-grid h3 {
+  max-width: 9ch;
+  margin: 2.6rem 0 1rem;
+  font-size: clamp(2rem, 4vw, 4.5rem);
+  letter-spacing: -0.07em;
+  line-height: 0.92;
+}
+
+.rarity-grid p {
+  max-width: 48ch;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+@media (max-width: 920px) {
+  .site-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .hero {
+    min-height: auto;
+    padding-top: 3rem;
+  }
+
+  .hero-copy h1 {
+    max-width: 10ch;
+    font-size: clamp(3.35rem, 14vw, 6.5rem);
+  }
+
+  .hero-stage {
+    min-height: 470px;
+  }
+
+  .lab-panel {
+    padding: 0.75rem;
+  }
+
+  .canvas-compare {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+
+  .canvas-compare figure {
+    scroll-snap-align: center;
+  }
+
+  .rarity-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  body {
+    padding-bottom: 4.8rem;
+  }
+
+  .section-shell {
+    width: min(100% - 1.15rem, 1180px);
+  }
+
+  .brand-copy small {
+    display: none;
+  }
+
+  .hero-actions {
+    display: grid;
+  }
+
+  .button {
+    width: 100%;
+  }
+
+  .hero-stage {
+    min-height: 390px;
+    overflow: hidden;
+  }
+
+  .camera-rig {
+    width: 330px;
+    transform: rotateX(48deg) rotateZ(-10deg) scale(0.72);
+  }
+
+  .preview-toolbar {
+    position: sticky;
+    top: 4.5rem;
+    z-index: 4;
+    margin: -0.25rem -0.25rem 0.75rem;
+    padding: 0.65rem;
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    background: rgba(5, 7, 13, 0.88);
+    backdrop-filter: blur(16px);
+  }
+
+  .canvas-compare {
+    grid-template-columns: repeat(2, 78vw);
+  }
+
+  .control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .control-grid label {
+    min-height: 4.2rem;
+    padding: 0.65rem;
+    border: 1px solid var(--line);
+    border-radius: 0.85rem;
+    background: rgba(255, 255, 255, 0.035);
+  }
+
+  input[type="range"] {
+    width: 100%;
+    min-height: 2rem;
+  }
+
+  .contact-sheet-tool {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .contact-sheet-tool button {
+    width: 100%;
+  }
+
+  .rarity-grid article {
+    min-height: 15rem;
+  }
+}

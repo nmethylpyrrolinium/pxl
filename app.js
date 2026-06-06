@@ -32,6 +32,10 @@ const DEFAULT_PARAMS = {
   shadowNoiseBoost: 1.35,
   highlightNoiseReduction: 0.55,
   orderedDitherStrength: 7,
+  chromaticAberration: 1.25,
+  scanlineStrength: 0.055,
+  dustStrength: 0.018,
+  lightLeakStrength: 0.08,
   jpegQuality: 0.58,
 };
 
@@ -232,6 +236,60 @@ function applyPhotonPixels(imageData, params, seed) {
   return imageData;
 }
 
+function applyArtifactPixels(imageData, params, seed = 1977) {
+  const { data, width, height } = imageData;
+  const source = new Uint8ClampedArray(data);
+  const rand = seededRandom(seed);
+  const aberration = Math.max(0, Math.round(params.chromaticAberration || 0));
+  const scanlineStrength = params.scanlineStrength || 0;
+  const dustStrength = params.dustStrength || 0;
+  const lightLeakStrength = params.lightLeakStrength || 0;
+  const leakX = width * 0.82;
+  const leakY = height * 0.28;
+  const leakRadius = width * 0.62;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      const edge = Math.hypot(x / width - 0.5, y / height - 0.5) / 0.7071;
+      const shift = Math.round(aberration * smoothstep(0.18, 1, edge));
+      const redX = clamp(x + shift, 0, width - 1);
+      const blueX = clamp(x - shift, 0, width - 1);
+      let r = source[(y * width + redX) * 4];
+      let g = source[index + 1];
+      let b = source[(y * width + blueX) * 4 + 2];
+
+      if (scanlineStrength > 0 && y % 3 === 0) {
+        const lineMultiplier = 1 - scanlineStrength;
+        r *= lineMultiplier;
+        g *= lineMultiplier;
+        b *= lineMultiplier;
+      }
+
+      if (lightLeakStrength > 0) {
+        const leakDistance = Math.hypot(x - leakX, y - leakY);
+        const leak = (1 - smoothstep(0, leakRadius, leakDistance)) * lightLeakStrength;
+        r += 255 * leak;
+        g += 92 * leak;
+        b += 22 * leak;
+      }
+
+      if (dustStrength > 0 && rand() < dustStrength * 0.008) {
+        const dust = rand() > 0.34 ? 84 : -72;
+        r += dust;
+        g += dust;
+        b += dust;
+      }
+
+      data[index] = clamp255(r);
+      data[index + 1] = clamp255(g);
+      data[index + 2] = clamp255(b);
+    }
+  }
+
+  return imageData;
+}
+
 function unsharpMask(imageData, amount) {
   const { data, width, height } = imageData;
   const src = new Uint8ClampedArray(data);
@@ -337,6 +395,8 @@ function renderSourceToCanvas(source, canvas, params = DEFAULT_PARAMS, seed = 20
   outputContext.imageSmoothingQuality = 'low';
   outputContext.clearRect(0, 0, outputWidth, outputHeight);
   outputContext.drawImage(internalCanvas, 0, 0, outputWidth, outputHeight);
+  const artifactData = outputContext.getImageData(0, 0, outputWidth, outputHeight);
+  outputContext.putImageData(applyArtifactPixels(artifactData, params, seed + 31), 0, 0);
   drawTimestamp(canvas);
 }
 
@@ -498,6 +558,10 @@ function currentParams() {
     lumaNoise: Number(document.getElementById('grainControl')?.value || DEFAULT_PARAMS.lumaNoise),
     shadowCyan: Number(document.getElementById('cyanControl')?.value || DEFAULT_PARAMS.shadowCyan),
     orderedDitherStrength: Number(document.getElementById('ditherControl')?.value || DEFAULT_PARAMS.orderedDitherStrength),
+    chromaticAberration: Number(document.getElementById('aberrationControl')?.value || DEFAULT_PARAMS.chromaticAberration),
+    scanlineStrength: Number(document.getElementById('scanlineControl')?.value || DEFAULT_PARAMS.scanlineStrength),
+    dustStrength: Number(document.getElementById('dustControl')?.value || DEFAULT_PARAMS.dustStrength),
+    lightLeakStrength: Number(document.getElementById('leakControl')?.value || DEFAULT_PARAMS.lightLeakStrength),
   };
 }
 
@@ -521,6 +585,7 @@ function initialize() {
 
   renderAll();
 
+  ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl'].forEach((id) => {
   ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl'].forEach((id) => {
     document.getElementById(id)?.addEventListener('input', () => {
       renderSourceToCanvas(activeSource, outputCanvas, currentParams(), 20260516);
@@ -538,6 +603,55 @@ function initialize() {
       renderAll(image);
     };
     image.src = url;
+  });
+
+  const presets = {
+    reference: {},
+    night: { contrast: 1.56, lumaNoise: 23, shadowCyan: 0.13, orderedDitherStrength: 10, chromaticAberration: 2.2, lightLeakStrength: 0 },
+    heat: { contrast: 1.32, lumaNoise: 15, shadowCyan: 0.045, orderedDitherStrength: 5, chromaticAberration: 1.5, lightLeakStrength: 0.32 },
+    hardSensor: { contrast: 1.68, lumaNoise: 27, shadowCyan: 0.09, orderedDitherStrength: 13, chromaticAberration: 3, scanlineStrength: 0.11 },
+  };
+
+  document.querySelectorAll('[data-preset]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const values = { ...DEFAULT_PARAMS, ...(presets[button.dataset.preset] || {}) };
+      const mapping = {
+        contrastControl: values.contrast,
+        grainControl: values.lumaNoise,
+        cyanControl: values.shadowCyan,
+        ditherControl: values.orderedDitherStrength,
+        aberrationControl: values.chromaticAberration,
+        scanlineControl: values.scanlineStrength,
+        dustControl: values.dustStrength,
+        leakControl: values.lightLeakStrength,
+      };
+      Object.entries(mapping).forEach(([id, value]) => { document.getElementById(id).value = value; });
+      document.querySelectorAll('[data-preset]').forEach((item) => item.classList.toggle('active', item === button));
+      renderSourceToCanvas(activeSource, outputCanvas, currentParams(), 20260516);
+      updateSignatureReport(sourcePreviewCanvas, outputCanvas);
+    });
+  });
+
+  document.getElementById('contactSheetButton')?.addEventListener('click', () => {
+    const sheet = document.getElementById('contactSheetCanvas');
+    const sheetContext = sheet.getContext('2d');
+    sheet.hidden = false;
+    sheetContext.fillStyle = '#05070d';
+    sheetContext.fillRect(0, 0, sheet.width, sheet.height);
+    const variants = Object.entries(presets);
+    variants.forEach(([name, overrides], index) => {
+      const tile = document.createElement('canvas');
+      tile.width = 410;
+      tile.height = 547;
+      renderSourceToCanvas(activeSource, tile, { ...DEFAULT_PARAMS, ...overrides }, 20260516 + index * 101);
+      const x = (index % 2) * 430 + 20;
+      const y = Math.floor(index / 2) * 600 + 20;
+      sheetContext.drawImage(tile, x, y, 410, 547);
+      sheetContext.fillStyle = '#54f3ff';
+      sheetContext.font = '700 18px monospace';
+      sheetContext.fillText(name.toUpperCase(), x, y + 575);
+    });
+    sheet.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
   document.getElementById('downloadButton')?.addEventListener('click', () => {
@@ -575,6 +689,7 @@ if (typeof module !== 'undefined') {
     hslToRgb,
     getCrop,
     applyPhotonPixels,
+    applyArtifactPixels,
     unsharpMask,
     imageSignature,
     scoreSignature,
