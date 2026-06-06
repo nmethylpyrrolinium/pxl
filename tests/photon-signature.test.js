@@ -1,9 +1,11 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const {
   DEFAULT_PARAMS,
   applyPhotonPixels,
   applyArtifactPixels,
   getCrop,
+  formatTimestamp,
   rgbToHsl,
   scoreSignature,
   isSupportedImageFile,
@@ -162,8 +164,21 @@ function testAdvancedArtifacts() {
 function testImageFileValidation() {
   assert.equal(isSupportedImageFile({ type: 'image/jpeg' }), true, 'camera JPEGs should be accepted');
   assert.equal(isSupportedImageFile({ type: 'image/heic' }), true, 'browser-advertised image formats should reach the decoder');
+  assert.equal(isSupportedImageFile({ type: '', name: 'airdrop-photo.JPG' }), true, 'extension fallback should accept files with missing MIME metadata');
+  assert.equal(isSupportedImageFile({ type: 'application/octet-stream', name: 'camera-photo.webp' }), true, 'generic binary MIME metadata should fall back to a known image extension');
+  assert.equal(isSupportedImageFile({ type: '', name: 'notes.txt' }), false, 'extension fallback should reject non-images');
   assert.equal(isSupportedImageFile({ type: 'application/pdf' }), false, 'non-image files should be rejected');
   assert.equal(isSupportedImageFile(null), false, 'empty picker results should be ignored');
+}
+
+function testMergedUiContract() {
+  const appSource = fs.readFileSync(require.resolve('../app.js'), 'utf8');
+  const html = fs.readFileSync(require.resolve('../index.html'), 'utf8');
+  assert.match(appSource, /const renderUserEdit = /, 'editor event handlers need renderUserEdit after conflict resolution');
+  assert.match(appSource, /let hasUserImage = false/, 'wall consent flow needs its user-image state after conflict resolution');
+  ['featuredGallery', 'wallDemoA', 'wallDemoB'].forEach((id) => {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} must remain in the page while app.js references it`);
+  });
 }
 
 function testReferenceSignatureContract() {
@@ -185,5 +200,6 @@ testHueRemapping();
 testDeterministicPhotonDamage();
 testAdvancedArtifacts();
 testImageFileValidation();
+testMergedUiContract();
 testReferenceSignatureContract();
 console.log('photon-signature tests passed');

@@ -626,8 +626,14 @@ function currentParams() {
   };
 }
 
+const IMAGE_FILE_EXTENSION = /\.(?:avif|bmp|gif|heic|heif|jpe?g|png|tiff?|webp)$/i;
+
 function isSupportedImageFile(file) {
-  return Boolean(file && typeof file.type === 'string' && file.type.startsWith('image/'));
+  if (!file) return false;
+  const type = typeof file.type === 'string' ? file.type : '';
+  if (type.startsWith('image/')) return true;
+  if (type && type !== 'application/octet-stream') return false;
+  return typeof file.name === 'string' && IMAGE_FILE_EXTENSION.test(file.name);
 }
 
 function initialize() {
@@ -644,6 +650,9 @@ function initialize() {
   let activeSource = sourceCanvas;
   let renderSeed = 20260516;
   let activeFileName = 'alams-dump';
+  let hasUserImage = false;
+  let loadRequestId = 0;
+  let activeObjectUrl = null;
 
   const setStatus = (message, state = '') => {
     if (!uploadStatus) return;
@@ -651,16 +660,41 @@ function initialize() {
     uploadStatus.dataset.state = state;
   };
 
+  const resizeEditorCanvases = (params) => {
+    const sourceWidth = activeSource.naturalWidth || activeSource.width || DEFAULT_PARAMS.outputWidth;
+    const sourceHeight = activeSource.naturalHeight || activeSource.height || DEFAULT_PARAMS.outputHeight;
+    const aspect = params.aspectRatio || sourceWidth / sourceHeight;
+    const width = DEFAULT_PARAMS.outputWidth;
+    const height = Math.max(1, Math.round(width / aspect));
+    [outputCanvas, sourcePreviewCanvas].forEach((canvas) => {
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    });
+  };
+
   const renderOutput = () => {
-    renderSourceToCanvas(activeSource, outputCanvas, currentParams(), renderSeed);
+    const params = currentParams();
+    resizeEditorCanvases(params);
+    renderRawPreview(activeSource, sourcePreviewCanvas, params);
+    renderSourceToCanvas(activeSource, outputCanvas, params, renderSeed);
     updateSignatureReport(sourcePreviewCanvas, outputCanvas);
+  };
+
+  const renderUserEdit = () => {
+    renderOutput();
+    if (hasUserImage) document.getElementById('featureAsk')?.removeAttribute('hidden');
   };
 
   const renderAll = (source = activeSource) => {
     activeSource = source;
-    renderRawPreview(activeSource, sourcePreviewCanvas);
     renderOutput();
     renderSourceToCanvas(sourceCanvas, demoCanvas, { ...DEFAULT_PARAMS, lumaNoise: 20, contrast: 1.46 }, 20260404);
+    const wallDemoA = document.getElementById('wallDemoA');
+    const wallDemoB = document.getElementById('wallDemoB');
+    if (wallDemoA) renderSourceToCanvas(sourceCanvas, wallDemoA, { ...DEFAULT_PARAMS, motionStyle: 'ghost', motionAmount: 0.42 }, 20260405);
+    if (wallDemoB) renderSourceToCanvas(sourceCanvas, wallDemoB, { ...DEFAULT_PARAMS, motionStyle: 'trails', motionAmount: 0.48, lightLeakStrength: 0.28 }, 20260406);
   };
 
   const loadImageFile = (file) => {
@@ -670,19 +704,42 @@ function initialize() {
       return;
     }
 
-    setStatus(`Developing ${file.name || 'camera photo'}…`, 'loading');
+    const requestId = ++loadRequestId;
+    if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
     const url = URL.createObjectURL(file);
+    activeObjectUrl = url;
+    setStatus(`Developing ${file.name || 'camera photo'}…`, 'loading');
+
     const image = new Image();
-    image.onload = () => {
+    image.decoding = 'async';
+    const finishRequest = () => {
+      if (activeObjectUrl === url) activeObjectUrl = null;
       URL.revokeObjectURL(url);
-      activeFileName = (file.name || 'camera-photo').replace(/\.[^.]+$/, '').replace(/[^a-z0-9-_]+/gi, '-').toLowerCase();
-      renderSeed = Math.max(1, Math.floor(file.lastModified || Date.now()) % 2147483647);
-      renderAll(image);
-      setStatus(`${file.name || 'Camera photo'} is in the dump. Adjust it, remix the grain, then save or share.`, 'success');
+    };
+    image.onload = () => {
+      if (requestId !== loadRequestId) {
+        finishRequest();
+        return;
+      }
+      try {
+        activeFileName = (file.name || 'camera-photo').replace(/\.[^.]+$/, '').replace(/[^a-z0-9-_]+/gi, '-').toLowerCase();
+        renderSeed = Math.max(1, Math.floor(file.lastModified || Date.now()) % 2147483647);
+        hasUserImage = true;
+        renderAll(image);
+        document.getElementById('featureAsk')?.removeAttribute('hidden');
+        setStatus(`${file.name || 'Camera photo'} is in the dump. Adjust it, remix the grain, then save or share.`, 'success');
+      } catch (error) {
+        console.error('Unable to render selected image.', error);
+        setStatus('This image opened but could not be rendered. Try a smaller JPG, PNG, or WebP file.', 'error');
+      } finally {
+        finishRequest();
+      }
     };
     image.onerror = () => {
-      URL.revokeObjectURL(url);
-      setStatus('This image could not be decoded by your browser. Convert HEIC/RAW files to JPG or PNG and try again.', 'error');
+      if (requestId === loadRequestId) {
+        setStatus('This image could not be decoded by your browser. Convert HEIC/RAW files to JPG or PNG and try again.', 'error');
+      }
+      finishRequest();
     };
     image.src = url;
   };
