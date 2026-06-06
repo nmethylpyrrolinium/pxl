@@ -36,6 +36,11 @@ const DEFAULT_PARAMS = {
   scanlineStrength: 0.055,
   dustStrength: 0.018,
   lightLeakStrength: 0.08,
+  aspectRatio: 0.75,
+  cropPosition: 0.5,
+  motionStyle: 'still',
+  motionAmount: 0.45,
+  timestampDate: null,
   jpegQuality: 0.58,
 };
 
@@ -134,9 +139,9 @@ function hslToRgb(h, s, lightness) {
   ];
 }
 
-function getCrop(sourceWidth, sourceHeight) {
-  const targetAspect = 3 / 4;
+function getCrop(sourceWidth, sourceHeight, targetAspect = 3 / 4, cropPosition = 0.5) {
   const sourceAspect = sourceWidth / sourceHeight;
+  const safePosition = clamp01(cropPosition);
   let sw = sourceWidth;
   let sh = sourceHeight;
 
@@ -147,11 +152,19 @@ function getCrop(sourceWidth, sourceHeight) {
   }
 
   return {
-    sx: (sourceWidth - sw) / 2,
-    sy: (sourceHeight - sh) / 2,
+    sx: (sourceWidth - sw) * safePosition,
+    sy: (sourceHeight - sh) * safePosition,
     sw,
     sh,
   };
+}
+
+function formatTimestamp(date = new Date()) {
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  const pad = (value) => String(value).padStart(2, '0');
+  const line1 = `${pad(safeDate.getMonth() + 1)} ${pad(safeDate.getDate())} ${safeDate.getFullYear()} ${pad(safeDate.getHours())}:${pad(safeDate.getMinutes())}:${pad(safeDate.getSeconds())}`;
+  const timezone = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(safeDate).find((part) => part.type === 'timeZoneName')?.value || 'LOCAL';
+  return { line1, line2: `${timezone.toUpperCase()} / ALAM’S DUMP` };
 }
 
 function applyPhotonPixels(imageData, params, seed) {
@@ -316,28 +329,70 @@ function unsharpMask(imageData, amount) {
   return imageData;
 }
 
-function drawTimestamp(canvas, line1 = '05 16 2026 19:41:50', line2 = '3Y 66D 13:18:10') {
+function drawTimestamp(canvas, date = new Date()) {
+  const { line1, line2 } = formatTimestamp(date);
   const ctx = canvas.getContext('2d');
-  const fontSize = Math.round(canvas.width * 0.037);
+  const fontSize = Math.round(canvas.width * 0.041);
   const right = Math.round(canvas.width * 0.03);
   const bottom = Math.round(canvas.height * 0.027);
-  const gap = Math.round(canvas.height * 0.034);
+  const gap = Math.round(canvas.height * 0.035);
   const x = canvas.width - right;
   const y2 = canvas.height - bottom;
   const y1 = y2 - gap;
 
   ctx.save();
-  ctx.font = `700 ${fontSize}px "IBM Plex Mono", "Courier New", monospace`;
+  ctx.font = `${fontSize}px "Share Tech Mono", "OCR A Std", "Courier New", monospace`;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.94)';
-  [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1]].forEach(([ox, oy]) => {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.96)';
+  [[-2, 0], [2, 0], [0, -2], [0, 2], [1, 1]].forEach(([ox, oy]) => {
     ctx.fillText(line1, x + ox, y1 + oy);
     ctx.fillText(line2, x + ox, y2 + oy);
   });
-  ctx.fillStyle = 'rgba(248, 248, 246, 0.96)';
+  ctx.fillStyle = 'rgba(255, 251, 232, 0.98)';
   ctx.fillText(line1, x, y1);
   ctx.fillText(line2, x, y2);
+  ctx.restore();
+}
+
+function applyMotionDamage(canvas, style = 'still', amount = 0, seed = 1) {
+  if (style === 'still' || amount <= 0) return;
+  const ctx = canvas.getContext('2d');
+  const copy = document.createElement('canvas');
+  copy.width = canvas.width;
+  copy.height = canvas.height;
+  copy.getContext('2d').drawImage(canvas, 0, 0);
+  const rand = seededRandom(seed);
+  const strength = clamp01(amount);
+
+  ctx.save();
+  if (style === 'shake') {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#05070d';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.filter = `blur(${(strength * 1.8).toFixed(2)}px)`;
+    for (let i = 0; i < 5; i += 1) {
+      ctx.globalAlpha = i === 0 ? 0.55 : 0.12;
+      ctx.drawImage(copy, (rand() - 0.5) * 14 * strength, (rand() - 0.5) * 9 * strength);
+    }
+  } else if (style === 'ghost') {
+    ctx.globalAlpha = 0.2 + strength * 0.24;
+    ctx.globalCompositeOperation = 'screen';
+    ctx.drawImage(copy, 5 + strength * 18, -2 - strength * 5);
+  } else if (style === 'trails') {
+    ctx.globalCompositeOperation = 'screen';
+    ctx.filter = `blur(${(strength * 2.2).toFixed(2)}px)`;
+    for (let i = 1; i <= 7; i += 1) {
+      ctx.globalAlpha = (0.13 * strength) * (1 - i / 9);
+      ctx.drawImage(copy, i * 5 * strength, -i * 1.3 * strength);
+    }
+  } else if (style === 'double') {
+    ctx.globalAlpha = 0.24 + strength * 0.26;
+    ctx.globalCompositeOperation = 'screen';
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((strength * 2.2 * Math.PI) / 180);
+    ctx.drawImage(copy, -canvas.width / 2 + strength * 13, -canvas.height / 2 - strength * 7);
+  }
   ctx.restore();
 }
 
@@ -375,7 +430,7 @@ function renderSourceToCanvas(source, canvas, params = DEFAULT_PARAMS, seed = 20
   const internalHeight = Math.round(outputHeight * params.internalScale);
   const sourceWidth = source.naturalWidth || source.width || source.videoWidth;
   const sourceHeight = source.naturalHeight || source.height || source.videoHeight;
-  const crop = getCrop(sourceWidth, sourceHeight);
+  const crop = getCrop(sourceWidth, sourceHeight, params.aspectRatio || outputWidth / outputHeight, params.cropPosition ?? 0.5);
   const internalCanvas = document.createElement('canvas');
   internalCanvas.width = internalWidth;
   internalCanvas.height = internalHeight;
@@ -395,15 +450,16 @@ function renderSourceToCanvas(source, canvas, params = DEFAULT_PARAMS, seed = 20
   outputContext.imageSmoothingQuality = 'low';
   outputContext.clearRect(0, 0, outputWidth, outputHeight);
   outputContext.drawImage(internalCanvas, 0, 0, outputWidth, outputHeight);
+  applyMotionDamage(canvas, params.motionStyle, params.motionAmount, seed + 17);
   const artifactData = outputContext.getImageData(0, 0, outputWidth, outputHeight);
   outputContext.putImageData(applyArtifactPixels(artifactData, params, seed + 31), 0, 0);
-  drawTimestamp(canvas);
+  drawTimestamp(canvas, params.timestampDate ? new Date(params.timestampDate) : new Date());
 }
 
-function renderRawPreview(source, canvas) {
+function renderRawPreview(source, canvas, params = DEFAULT_PARAMS) {
   const sourceWidth = source.naturalWidth || source.width || source.videoWidth;
   const sourceHeight = source.naturalHeight || source.height || source.videoHeight;
-  const crop = getCrop(sourceWidth, sourceHeight);
+  const crop = getCrop(sourceWidth, sourceHeight, params.aspectRatio || canvas.width / canvas.height, params.cropPosition ?? 0.5);
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -562,48 +618,152 @@ function currentParams() {
     scanlineStrength: Number(document.getElementById('scanlineControl')?.value || DEFAULT_PARAMS.scanlineStrength),
     dustStrength: Number(document.getElementById('dustControl')?.value || DEFAULT_PARAMS.dustStrength),
     lightLeakStrength: Number(document.getElementById('leakControl')?.value || DEFAULT_PARAMS.lightLeakStrength),
+    aspectRatio: document.querySelector('[data-crop].active')?.dataset.crop === 'original' ? null : Number(document.querySelector('[data-crop].active')?.dataset.crop || DEFAULT_PARAMS.aspectRatio),
+    cropPosition: Number(document.getElementById('cropPositionControl')?.value || DEFAULT_PARAMS.cropPosition),
+    motionStyle: document.querySelector('[data-motion].active')?.dataset.motion || DEFAULT_PARAMS.motionStyle,
+    motionAmount: Number(document.getElementById('motionControl')?.value || DEFAULT_PARAMS.motionAmount),
+    timestampDate: document.getElementById('timestampNow')?.checked ? null : document.getElementById('customTimestamp')?.value || null,
   };
+}
+
+function isSupportedImageFile(file) {
+  return Boolean(file && typeof file.type === 'string' && file.type.startsWith('image/'));
 }
 
 function initialize() {
   const demoCanvas = document.getElementById('demoCanvas');
   const outputCanvas = document.getElementById('outputCanvas');
   const sourcePreviewCanvas = document.getElementById('sourceCanvas');
+  const uploadStatus = document.getElementById('uploadStatus');
+  const dropZone = document.getElementById('dropZone');
   const sourceCanvas = document.createElement('canvas');
   sourceCanvas.width = DEFAULT_PARAMS.outputWidth;
   sourceCanvas.height = DEFAULT_PARAMS.outputHeight;
   makeProceduralScene(sourceCanvas);
 
   let activeSource = sourceCanvas;
-  const renderAll = (source = activeSource) => {
-    activeSource = source;
-    renderRawPreview(activeSource, sourcePreviewCanvas);
-    renderSourceToCanvas(activeSource, outputCanvas, currentParams(), 20260516);
-    renderSourceToCanvas(sourceCanvas, demoCanvas, { ...DEFAULT_PARAMS, lumaNoise: 20, contrast: 1.46 }, 20260404);
+  let renderSeed = 20260516;
+  let activeFileName = 'alams-dump';
+  let hasUserImage = false;
+
+  const setStatus = (message, state = '') => {
+    if (!uploadStatus) return;
+    uploadStatus.textContent = message;
+    uploadStatus.dataset.state = state;
+  };
+
+  const resizeEditorCanvases = (params) => {
+    const sourceWidth = activeSource.naturalWidth || activeSource.width || DEFAULT_PARAMS.outputWidth;
+    const sourceHeight = activeSource.naturalHeight || activeSource.height || DEFAULT_PARAMS.outputHeight;
+    const aspect = params.aspectRatio || sourceWidth / sourceHeight;
+    const width = DEFAULT_PARAMS.outputWidth;
+    const height = Math.round(width / aspect);
+    [outputCanvas, sourcePreviewCanvas].forEach((canvas) => {
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    });
+  };
+
+  const renderOutput = () => {
+    const params = currentParams();
+    resizeEditorCanvases(params);
+    renderRawPreview(activeSource, sourcePreviewCanvas, params);
+    renderSourceToCanvas(activeSource, outputCanvas, params, renderSeed);
     updateSignatureReport(sourcePreviewCanvas, outputCanvas);
   };
 
-  renderAll();
+  const renderUserEdit = () => {
+    renderOutput();
+    if (hasUserImage) document.getElementById('featureAsk').hidden = false;
+  };
 
-  ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl'].forEach((id) => {
-  ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl'].forEach((id) => {
-    document.getElementById(id)?.addEventListener('input', () => {
-      renderSourceToCanvas(activeSource, outputCanvas, currentParams(), 20260516);
-      updateSignatureReport(sourcePreviewCanvas, outputCanvas);
-    });
-  });
+  const renderAll = (source = activeSource) => {
+    activeSource = source;
+    renderOutput();
+    renderSourceToCanvas(sourceCanvas, demoCanvas, { ...DEFAULT_PARAMS, lumaNoise: 20, contrast: 1.46 }, 20260404);
+    const wallDemoA = document.getElementById('wallDemoA');
+    const wallDemoB = document.getElementById('wallDemoB');
+    if (wallDemoA) renderSourceToCanvas(sourceCanvas, wallDemoA, { ...DEFAULT_PARAMS, motionStyle: 'ghost', motionAmount: 0.42 }, 20260405);
+    if (wallDemoB) renderSourceToCanvas(sourceCanvas, wallDemoB, { ...DEFAULT_PARAMS, motionStyle: 'trails', motionAmount: 0.48, lightLeakStrength: 0.28 }, 20260406);
+  };
 
-  document.getElementById('imageInput')?.addEventListener('change', (event) => {
-    const file = event.target.files?.[0];
+  const loadImageFile = (file) => {
     if (!file) return;
+    if (!isSupportedImageFile(file)) {
+      setStatus('That file is not an image. Try a JPG, PNG, WebP, or another browser-supported image.', 'error');
+      return;
+    }
+
+    setStatus(`Developing ${file.name || 'camera photo'}…`, 'loading');
     const url = URL.createObjectURL(file);
     const image = new Image();
     image.onload = () => {
       URL.revokeObjectURL(url);
+      activeFileName = (file.name || 'camera-photo').replace(/\.[^.]+$/, '').replace(/[^a-z0-9-_]+/gi, '-').toLowerCase();
+      renderSeed = Math.max(1, Math.floor(file.lastModified || Date.now()) % 2147483647);
+      hasUserImage = true;
       renderAll(image);
+      document.getElementById('featureAsk').hidden = false;
+      setStatus(`${file.name || 'Camera photo'} ready.`, 'success');
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      setStatus('This image could not be decoded by your browser. Convert HEIC/RAW files to JPG or PNG and try again.', 'error');
     };
     image.src = url;
+  };
+
+  renderAll();
+
+  ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl', 'cropPositionControl', 'motionControl'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', renderUserEdit);
   });
+
+  ['crop', 'motion'].forEach((kind) => {
+    document.querySelectorAll(`[data-${kind}]`).forEach((button) => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll(`[data-${kind}]`).forEach((item) => item.classList.toggle('active', item === button));
+        renderUserEdit();
+      });
+    });
+  });
+
+  const timestampNow = document.getElementById('timestampNow');
+  const customTimestamp = document.getElementById('customTimestamp');
+  const localDateTimeValue = (date = new Date()) => {
+    const offset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+  };
+  customTimestamp.value = localDateTimeValue();
+  timestampNow?.addEventListener('change', () => {
+    customTimestamp.disabled = timestampNow.checked;
+    if (timestampNow.checked) customTimestamp.value = localDateTimeValue();
+    renderUserEdit();
+  });
+  customTimestamp?.addEventListener('input', renderUserEdit);
+
+  ['imageInput', 'cameraInput'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', (event) => {
+      loadImageFile(event.target.files?.[0]);
+      event.target.value = '';
+    });
+  });
+
+  ['dragenter', 'dragover'].forEach((eventName) => {
+    dropZone?.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropZone.classList.add('is-dragging');
+    });
+  });
+  ['dragleave', 'drop'].forEach((eventName) => {
+    dropZone?.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      dropZone.classList.remove('is-dragging');
+    });
+  });
+  dropZone?.addEventListener('drop', (event) => loadImageFile(event.dataTransfer?.files?.[0]));
 
   const presets = {
     reference: {},
@@ -627,9 +787,14 @@ function initialize() {
       };
       Object.entries(mapping).forEach(([id, value]) => { document.getElementById(id).value = value; });
       document.querySelectorAll('[data-preset]').forEach((item) => item.classList.toggle('active', item === button));
-      renderSourceToCanvas(activeSource, outputCanvas, currentParams(), 20260516);
-      updateSignatureReport(sourcePreviewCanvas, outputCanvas);
+      renderUserEdit();
     });
+  });
+
+  document.getElementById('remixButton')?.addEventListener('click', () => {
+    renderSeed = (renderSeed + 104729) % 2147483647;
+    renderUserEdit();
+    setStatus('New damage.', 'success');
   });
 
   document.getElementById('contactSheetButton')?.addEventListener('click', () => {
@@ -638,12 +803,11 @@ function initialize() {
     sheet.hidden = false;
     sheetContext.fillStyle = '#05070d';
     sheetContext.fillRect(0, 0, sheet.width, sheet.height);
-    const variants = Object.entries(presets);
-    variants.forEach(([name, overrides], index) => {
+    Object.entries(presets).forEach(([name, overrides], index) => {
       const tile = document.createElement('canvas');
       tile.width = 410;
       tile.height = 547;
-      renderSourceToCanvas(activeSource, tile, { ...DEFAULT_PARAMS, ...overrides }, 20260516 + index * 101);
+      renderSourceToCanvas(activeSource, tile, { ...currentParams(), ...overrides }, renderSeed + index * 101);
       const x = (index % 2) * 430 + 20;
       const y = Math.floor(index / 2) * 600 + 20;
       sheetContext.drawImage(tile, x, y, 410, 547);
@@ -654,15 +818,58 @@ function initialize() {
     sheet.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
-  document.getElementById('downloadButton')?.addEventListener('click', () => {
-    outputCanvas.toBlob((blob) => {
-      if (!blob) return;
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'photon-pxl-reconstruction.jpg';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 2500);
-    }, 'image/jpeg', DEFAULT_PARAMS.jpegQuality);
+  const outputBlob = () => {
+    renderOutput();
+    return new Promise((resolve) => outputCanvas.toBlob(resolve, 'image/jpeg', DEFAULT_PARAMS.jpegQuality));
+  };
+
+  document.getElementById('downloadButton')?.addEventListener('click', async () => {
+    const blob = await outputBlob();
+    if (!blob) return;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `${activeFileName}-dumped.jpg`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 2500);
+  });
+
+  document.getElementById('shareButton')?.addEventListener('click', async () => {
+    const blob = await outputBlob();
+    if (!blob) return;
+    const file = new File([blob], `${activeFileName}-dumped.jpg`, { type: 'image/jpeg' });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Alam’s Dump', text: 'A photo I wrecked in Alam’s Dump.' });
+        setStatus('Dump shared.', 'success');
+      } catch (error) {
+        if (error.name !== 'AbortError') setStatus('Sharing was blocked. Download the JPEG instead.', 'error');
+      }
+    } else {
+      setStatus('File sharing is not supported in this browser. Download the JPEG instead.', 'error');
+    }
+  });
+
+  document.getElementById('featureYes')?.addEventListener('click', () => {
+    if (!hasUserImage) return;
+    const gallery = document.getElementById('featuredGallery');
+    const figure = document.createElement('figure');
+    figure.className = 'hanging-photo user-feature';
+    const image = new Image();
+    image.src = outputCanvas.toDataURL('image/jpeg', 0.76);
+    image.alt = 'A user-approved Alam’s Dump edit';
+    const caption = document.createElement('figcaption');
+    caption.textContent = `${formatTimestamp(new Date()).line1} / APPROVED`;
+    figure.append(image, caption);
+    gallery.prepend(figure);
+    document.getElementById('wallEmpty')?.remove();
+    document.getElementById('featureAsk').hidden = true;
+    setStatus('Added to the wall for this session.', 'success');
+    document.getElementById('wall')?.scrollIntoView({ behavior: 'smooth' });
+  });
+
+  document.getElementById('featureNo')?.addEventListener('click', () => {
+    document.getElementById('featureAsk').hidden = true;
+    setStatus('Kept private.', 'success');
   });
 
   const rig = document.getElementById('cameraRig');
@@ -688,11 +895,13 @@ if (typeof module !== 'undefined') {
     rgbToHsl,
     hslToRgb,
     getCrop,
+    formatTimestamp,
     applyPhotonPixels,
     applyArtifactPixels,
     unsharpMask,
     imageSignature,
     scoreSignature,
+    isSupportedImageFile,
   };
 }
 

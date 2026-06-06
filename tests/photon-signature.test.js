@@ -6,6 +6,8 @@ const {
   getCrop,
   rgbToHsl,
   scoreSignature,
+  isSupportedImageFile,
+  formatTimestamp,
   REFERENCE_SIGNATURE,
 } = require('../app.js');
 
@@ -106,6 +108,15 @@ function testCrop() {
   assert.deepEqual(getCrop(1600, 900), { sx: 462.5, sy: 0, sw: 675, sh: 900 });
 }
 
+function testCropOptionsAndTimestamp() {
+  assert.deepEqual(getCrop(1600, 900, 1), { sx: 350, sy: 0, sw: 900, sh: 900 });
+  assert.deepEqual(getCrop(1600, 900, 1, 0), { sx: 0, sy: 0, sw: 900, sh: 900 });
+  assert.deepEqual(getCrop(1600, 900, 1, 1), { sx: 700, sy: 0, sw: 900, sh: 900 });
+  const stamp = formatTimestamp(new Date(2026, 5, 6, 9, 8, 7));
+  assert.equal(stamp.line1, '06 06 2026 09:08:07');
+  assert.match(stamp.line2, /ALAM’S DUMP$/);
+}
+
 function testHueRemapping() {
   const greenInHue = rgbToHsl(50, 145, 60)[0];
   const greenOutHue = rgbToHsl(...processPixel([50, 145, 60]))[0];
@@ -149,6 +160,13 @@ function testAdvancedArtifacts() {
   assert.ok(a.data[rightEdge] >= source.data[rightEdge], 'spatial heat leak should preserve or add red energy near the right edge');
 }
 
+function testImageFileValidation() {
+  assert.equal(isSupportedImageFile({ type: 'image/jpeg' }), true, 'camera JPEGs should be accepted');
+  assert.equal(isSupportedImageFile({ type: 'image/heic' }), true, 'browser-advertised image formats should reach the decoder');
+  assert.equal(isSupportedImageFile({ type: 'application/pdf' }), false, 'non-image files should be rejected');
+  assert.equal(isSupportedImageFile(null), false, 'empty picker results should be ignored');
+}
+
 function testReferenceSignatureContract() {
   const syntheticReferenceLikeSignature = {
     blackCrush: 0.32,
@@ -163,8 +181,10 @@ function testReferenceSignatureContract() {
 }
 
 testCrop();
+testCropOptionsAndTimestamp();
 testHueRemapping();
 testDeterministicPhotonDamage();
 testAdvancedArtifacts();
+testImageFileValidation();
 testReferenceSignatureContract();
 console.log('photon-signature tests passed');
