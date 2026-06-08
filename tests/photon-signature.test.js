@@ -210,6 +210,10 @@ function testMergedUiContract() {
   assert.match(appSource, /let hasUserImage = false/, 'wall consent flow needs its user-image state after conflict resolution');
   assert.doesNotMatch(html, /surreal|doubleExposure|levitation/i, 'removed composite templates must stay out of the UI contract');
   assert.match(appSource, /requireWallProfile\(\)/, 'wall interactions must remain gated behind a profile');
+  assert.match(appSource, /requestIdleCallback/, 'first-load editor work should be deferred until the browser is idle');
+  assert.match(appSource, /IntersectionObserver/, 'below-the-fold wall demos should render lazily');
+  assert.match(appSource, /maxLongEdge = 720/, 'extreme original aspect ratios must not create unbounded editor canvases');
+  assert.match(html, /<script src=["']app\.js["'] defer>/, 'application JavaScript should not block HTML parsing');
   ['featuredGallery', 'wallDemoA', 'wallDemoB', 'profileForm', 'activeProfile', 'wallStatus'].forEach((id) => {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} must remain in the page while app.js references it`);
   });

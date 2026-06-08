@@ -19,6 +19,7 @@
 }
 
 html {
+  overflow-x: clip;
   scroll-behavior: smooth;
 }
 
@@ -1332,4 +1333,207 @@ input[type="range"] {
   .wall-passport, .hanging-gallery { grid-template-columns: 1fr; }
   .wall-passport form { align-items: stretch; flex-direction: column; }
   .wall-passport form input, .wall-passport form button { width: 100%; }
+}
+
+/* Responsive and first-load performance safeguards */
+.lab,
+.photo-wall,
+.rarities,
+.pipeline {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}
+
+button,
+.button,
+.file-drop,
+.site-header a,
+input[type="range"] {
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+summary:focus-visible,
+.file-drop:focus-within {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+@media (max-width: 920px) {
+  .site-header {
+    gap: 0.75rem;
+    padding-block: 0.75rem;
+  }
+
+  .site-header nav {
+    display: flex;
+  }
+
+  .hero {
+    min-height: auto;
+    padding-top: clamp(2.5rem, 8vw, 4rem);
+  }
+
+  .hero-stage {
+    min-height: min(72vw, 560px);
+  }
+
+  .lab-panel {
+    width: min(100%, 680px);
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .canvas-compare,
+  #signatureReport {
+    grid-template-columns: 1fr;
+  }
+
+  .canvas-compare canvas {
+    max-height: 72vh;
+    object-fit: contain;
+  }
+
+  .preview-toolbar,
+  .contact-sheet-tool {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .preview-toolbar > div {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .preview-toolbar button,
+  .contact-sheet-tool button {
+    min-height: 2.75rem;
+    padding-inline: 0.65rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .section-shell {
+    width: min(100% - 1.25rem, 1180px);
+  }
+
+  .site-header {
+    position: sticky;
+  }
+
+  .brand {
+    gap: 0.55rem;
+  }
+
+  .brand-mark {
+    width: 2.5rem;
+  }
+
+  .brand-copy small {
+    display: none;
+  }
+
+  .site-header nav {
+    gap: 0.3rem;
+  }
+
+  .site-header nav a {
+    min-height: 2.75rem;
+    padding: 0.75rem;
+  }
+
+  h1 {
+    font-size: clamp(3.35rem, 17vw, 5rem);
+    line-height: 0.94;
+  }
+
+  h2 {
+    font-size: clamp(2.5rem, 14vw, 4rem);
+    line-height: 0.95;
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .hero-actions .button {
+    width: 100%;
+  }
+
+  .hero-stage {
+    min-height: 390px;
+    overflow: hidden;
+  }
+
+  .camera-rig {
+    width: min(94vw, 360px);
+    transform: rotateX(50deg) rotateZ(-12deg) scale(0.72);
+  }
+
+  .lab-panel {
+    padding: 0.7rem;
+    border-radius: 1.25rem;
+  }
+
+  .control-grid {
+    gap: 1rem;
+  }
+
+  input[type="range"] {
+    min-height: 2.75rem;
+  }
+
+  .preset-rail {
+    margin-inline: -0.7rem;
+    padding-inline: 0.7rem;
+  }
+
+  .wall-passport > div,
+  .active-profile {
+    align-items: flex-start;
+  }
+
+  .hanging-gallery {
+    padding-inline: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@media (max-width: 700px), (prefers-reduced-motion: reduce) {
+  .grain::after {
+    animation: none;
+    opacity: 0.07;
+  }
+
+  .orb {
+    filter: blur(12px);
+    opacity: 0.22;
+  }
+
+  .site-header,
+  .thesis article,
+  .lab-panel,
+  .file-drop,
+  .pipeline-list li {
+    backdrop-filter: none;
+  }
 }

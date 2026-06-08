@@ -826,9 +826,14 @@ function initialize() {
   const resizeEditorCanvases = (params) => {
     const sourceWidth = activeSource.naturalWidth || activeSource.width || DEFAULT_PARAMS.outputWidth;
     const sourceHeight = activeSource.naturalHeight || activeSource.height || DEFAULT_PARAMS.outputHeight;
-    const aspect = params.aspectRatio || sourceWidth / sourceHeight;
-    const width = DEFAULT_PARAMS.outputWidth;
-    const height = Math.max(1, Math.round(width / aspect));
+    const aspect = Math.max(0.05, params.aspectRatio || sourceWidth / sourceHeight);
+    const maxLongEdge = 720;
+    const width = aspect > 1
+      ? maxLongEdge
+      : Math.max(1, Math.round(Math.min(DEFAULT_PARAMS.outputWidth, maxLongEdge * aspect)));
+    const height = aspect > 1
+      ? Math.max(1, Math.round(maxLongEdge / aspect))
+      : Math.max(1, Math.round(width / aspect));
     [outputCanvas, sourcePreviewCanvas].forEach((canvas) => {
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
@@ -845,19 +850,39 @@ function initialize() {
     updateSignatureReport(sourcePreviewCanvas, outputCanvas);
   };
 
-  const renderUserEdit = () => {
-    renderOutput();
-    if (hasUserImage) document.getElementById('featureAsk')?.removeAttribute('hidden');
+  let editRenderTimer = 0;
+  const renderUserEdit = (immediate = false) => {
+    window.clearTimeout(editRenderTimer);
+    const render = () => {
+      editRenderTimer = 0;
+      renderOutput();
+      if (hasUserImage) document.getElementById('featureAsk')?.removeAttribute('hidden');
+    };
+    if (immediate) render();
+    else editRenderTimer = window.setTimeout(render, 70);
   };
 
-  const renderAll = (source = activeSource) => {
-    activeSource = source;
-    renderOutput();
-    renderSourceToCanvas(sourceCanvas, demoCanvas, { ...DEFAULT_PARAMS, lumaNoise: 20, contrast: 1.46 }, 20260404);
+  const runWhenIdle = (callback) => {
+    if ('requestIdleCallback' in window) window.requestIdleCallback(callback, { timeout: 900 });
+    else window.setTimeout(callback, 80);
+  };
+
+  const renderWallDemos = () => {
     const wallDemoA = document.getElementById('wallDemoA');
     const wallDemoB = document.getElementById('wallDemoB');
-    if (wallDemoA) renderSourceToCanvas(sourceCanvas, wallDemoA, { ...DEFAULT_PARAMS, motionStyle: 'ghost', motionAmount: 0.42 }, 20260405);
-    if (wallDemoB) renderSourceToCanvas(sourceCanvas, wallDemoB, { ...DEFAULT_PARAMS, motionStyle: 'trails', motionAmount: 0.48, lightLeakStrength: 0.28 }, 20260406);
+    if (wallDemoA?.dataset.rendered !== 'true') {
+      renderSourceToCanvas(sourceCanvas, wallDemoA, { ...DEFAULT_PARAMS, motionStyle: 'ghost', motionAmount: 0.42 }, 20260405);
+      wallDemoA.dataset.rendered = 'true';
+    }
+    if (wallDemoB?.dataset.rendered !== 'true') {
+      renderSourceToCanvas(sourceCanvas, wallDemoB, { ...DEFAULT_PARAMS, motionStyle: 'trails', motionAmount: 0.48, lightLeakStrength: 0.28 }, 20260406);
+      wallDemoB.dataset.rendered = 'true';
+    }
+  };
+
+  const renderAll = (source = activeSource, immediate = false) => {
+    activeSource = source;
+    renderUserEdit(immediate);
   };
 
   const loadImageFile = (file) => {
@@ -888,7 +913,7 @@ function initialize() {
         activeFileName = (file.name || 'camera-photo').replace(/\.[^.]+$/, '').replace(/[^a-z0-9-_]+/gi, '-').toLowerCase();
         renderSeed = Math.max(1, Math.floor(file.lastModified || Date.now()) % 2147483647);
         hasUserImage = true;
-        renderAll(image);
+        renderAll(image, true);
         document.getElementById('featureAsk')?.removeAttribute('hidden');
         setStatus(`${file.name || 'Camera photo'} is in the dump. Adjust it, remix the grain, then save or share.`, 'success');
       } catch (error) {
@@ -907,17 +932,42 @@ function initialize() {
     image.src = url;
   };
 
-  renderAll();
+  renderRawPreview(sourceCanvas, demoCanvas);
+  runWhenIdle(() => renderSourceToCanvas(sourceCanvas, demoCanvas, { ...DEFAULT_PARAMS, lumaNoise: 20, contrast: 1.46 }, 20260404));
+
+  const lab = document.getElementById('lab');
+  if ('IntersectionObserver' in window && lab) {
+    const labObserver = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      labObserver.disconnect();
+      runWhenIdle(() => renderAll());
+    }, { rootMargin: '500px 0px' });
+    labObserver.observe(lab);
+  } else {
+    runWhenIdle(() => renderAll());
+  }
+
+  const wall = document.getElementById('wall');
+  if ('IntersectionObserver' in window && wall) {
+    const wallObserver = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      wallObserver.disconnect();
+      runWhenIdle(renderWallDemos);
+    }, { rootMargin: '500px 0px' });
+    wallObserver.observe(wall);
+  } else {
+    runWhenIdle(renderWallDemos);
+  }
 
   ['contrastControl', 'grainControl', 'noiseCancelControl', 'sharpnessControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl', 'cropPositionControl', 'motionControl', 'effectIntensityControl', 'effectDirectionControl'].forEach((id) => {
-    document.getElementById(id)?.addEventListener('input', renderUserEdit);
+    document.getElementById(id)?.addEventListener('input', () => renderUserEdit());
   });
 
   ['crop', 'motion', 'effect'].forEach((kind) => {
     document.querySelectorAll(`[data-${kind}]`).forEach((button) => {
       button.addEventListener('click', () => {
         document.querySelectorAll(`[data-${kind}]`).forEach((item) => item.classList.toggle('active', item === button));
-        renderUserEdit();
+        renderUserEdit(true);
       });
     });
   });
@@ -934,8 +984,8 @@ function initialize() {
     if (timestampNow.checked) customTimestamp.value = localDateTimeValue();
     renderUserEdit();
   });
-  customTimestamp?.addEventListener('input', renderUserEdit);
-  document.getElementById('stampNameControl')?.addEventListener('input', renderUserEdit);
+  customTimestamp?.addEventListener('input', () => renderUserEdit());
+  document.getElementById('stampNameControl')?.addEventListener('input', () => renderUserEdit());
 
   ['imageInput', 'cameraInput'].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', (event) => {
