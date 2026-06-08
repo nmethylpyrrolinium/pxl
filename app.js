@@ -26,7 +26,9 @@ const DEFAULT_PARAMS = {
   bloomStrength: 0.065,
   vignetteStrength: 0.16,
   vignetteRadius: 0.74,
-  sharpenAmount: 0.65,
+  sharpenAmount: 0.78,
+  noiseCancellation: 0.48,
+  stampName: 'Alam’s Dump',
   lumaNoise: 17,
   chromaNoise: 9,
   shadowNoiseBoost: 1.35,
@@ -159,12 +161,13 @@ function getCrop(sourceWidth, sourceHeight, targetAspect = 3 / 4, cropPosition =
   };
 }
 
-function formatTimestamp(date = new Date()) {
+function formatTimestamp(date = new Date(), stampName = '') {
   const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
   const pad = (value) => String(value).padStart(2, '0');
   const line1 = `${pad(safeDate.getMonth() + 1)} ${pad(safeDate.getDate())} ${safeDate.getFullYear()} ${pad(safeDate.getHours())}:${pad(safeDate.getMinutes())}:${pad(safeDate.getSeconds())}`;
   const timezone = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(safeDate).find((part) => part.type === 'timeZoneName')?.value || 'LOCAL';
-  return { line1, line2: `${timezone.toUpperCase()} / ALAM’S DUMP` };
+  const owner = String(stampName || '').trim().replace(/\s+/g, ' ').slice(0, 32) || 'ALAM’S DUMP';
+  return { line1, line2: `${timezone.toUpperCase()} / ${owner.toUpperCase()}` };
 }
 
 function applyPhotonPixels(imageData, params, seed) {
@@ -329,8 +332,45 @@ function unsharpMask(imageData, amount) {
   return imageData;
 }
 
-function drawTimestamp(canvas, date = new Date()) {
-  const { line1, line2 } = formatTimestamp(date);
+function reduceNoise(imageData, amount = 0) {
+  const strength = clamp01(amount);
+  if (strength <= 0) return imageData;
+
+  const { data, width, height } = imageData;
+  const src = new Uint8ClampedArray(data);
+  const edgeThreshold = 18 + (1 - strength) * 62;
+
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const index = (y * width + x) * 4;
+      const centerLuma = luma(src[index] / 255, src[index + 1] / 255, src[index + 2] / 255) * 255;
+      const totals = [src[index], src[index + 1], src[index + 2]];
+      let weight = 1;
+
+      for (let yy = -1; yy <= 1; yy += 1) {
+        for (let xx = -1; xx <= 1; xx += 1) {
+          if (xx === 0 && yy === 0) continue;
+          const sample = ((y + yy) * width + x + xx) * 4;
+          const sampleLuma = luma(src[sample] / 255, src[sample + 1] / 255, src[sample + 2] / 255) * 255;
+          const sampleWeight = Math.max(0, 1 - Math.abs(sampleLuma - centerLuma) / edgeThreshold) * strength;
+          totals[0] += src[sample] * sampleWeight;
+          totals[1] += src[sample + 1] * sampleWeight;
+          totals[2] += src[sample + 2] * sampleWeight;
+          weight += sampleWeight;
+        }
+      }
+
+      data[index] = clamp255(lerp(src[index], totals[0] / weight, strength));
+      data[index + 1] = clamp255(lerp(src[index + 1], totals[1] / weight, strength));
+      data[index + 2] = clamp255(lerp(src[index + 2], totals[2] / weight, strength));
+    }
+  }
+
+  return imageData;
+}
+
+function drawTimestamp(canvas, date = new Date(), stampName = '') {
+  const { line1, line2 } = formatTimestamp(date, stampName);
   const ctx = canvas.getContext('2d');
   const fontSize = Math.round(canvas.width * 0.041);
   const right = Math.round(canvas.width * 0.03);
@@ -386,12 +426,6 @@ function applyMotionDamage(canvas, style = 'still', amount = 0, seed = 1) {
       ctx.globalAlpha = (0.13 * strength) * (1 - i / 9);
       ctx.drawImage(copy, i * 5 * strength, -i * 1.3 * strength);
     }
-  } else if (style === 'double') {
-    ctx.globalAlpha = 0.24 + strength * 0.26;
-    ctx.globalCompositeOperation = 'screen';
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.rotate((strength * 2.2 * Math.PI) / 180);
-    ctx.drawImage(copy, -canvas.width / 2 + strength * 13, -canvas.height / 2 - strength * 7);
   }
   ctx.restore();
 }
@@ -475,10 +509,6 @@ function applyCreativeEffect(canvas, params, seed = 1) {
   const height = canvas.height;
   const intensity = clamp01(params.effectIntensity ?? 0.68);
   const direction = clamp(params.effectDirection ?? 0.45, -1, 1);
-  const scale = params.effectScale ?? 0.86;
-  const softness = clamp01(params.effectSoftness ?? 0.35);
-  const secondary = params.secondarySource;
-
   if (mode === 'neonNoir') {
     ctx.putImageData(applyNeonNoirPixels(ctx.getImageData(0, 0, width, height), intensity), 0, 0);
     applyBloom(canvas, { bloomThreshold: 0.58, bloomRadius: 8 + intensity * 9, bloomStrength: 0.18 + intensity * 0.32 });
@@ -515,49 +545,7 @@ function applyCreativeEffect(canvas, params, seed = 1) {
     ctx.restore();
     return;
   }
-  if (!secondary) return;
-
-  const layer = document.createElement('canvas'); layer.width = width; layer.height = height;
-  const layerCtx = layer.getContext('2d');
-  drawCover(layerCtx, secondary, width, height);
-
-  if (mode === 'doubleExposure') {
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    ctx.globalAlpha = 0.25 + intensity * 0.65;
-    ctx.filter = `contrast(${1.05 + intensity * 0.65}) saturate(${0.65 + intensity * 0.55})`;
-    ctx.translate(direction * width * 0.08, 0);
-    ctx.drawImage(layer, 0, 0, width, height);
-    ctx.restore();
-  } else if (mode === 'surreal') {
-    const objectWidth = width * 0.62 * scale;
-    const objectHeight = height * 0.48 * scale;
-    const x = width * 0.5 - objectWidth * 0.5 + direction * width * 0.18;
-    const y = height * 0.42 - objectHeight * 0.5;
-    ctx.save();
-    ctx.globalAlpha = 0.24 + intensity * 0.3;
-    ctx.filter = `blur(${8 + softness * 20}px)`;
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(x + objectWidth * 0.5, y + objectHeight * 1.08, objectWidth * 0.42, objectHeight * 0.11, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    ctx.save();
-    ctx.beginPath(); ctx.ellipse(x + objectWidth / 2, y + objectHeight / 2, objectWidth / 2, objectHeight / 2, direction * 0.2, 0, Math.PI * 2); ctx.clip();
-    ctx.globalAlpha = 0.45 + intensity * 0.55;
-    ctx.filter = `saturate(${1 + intensity}) contrast(${1 + intensity * 0.35})`;
-    ctx.drawImage(layer, x, y, objectWidth, objectHeight);
-    ctx.restore();
-    ctx.save(); ctx.strokeStyle = `rgba(84,243,255,${0.2 + intensity * 0.55})`; ctx.lineWidth = 2 + intensity * 5;
-    ctx.beginPath(); ctx.ellipse(x + objectWidth / 2, y + objectHeight / 2, objectWidth / 2, objectHeight / 2, direction * 0.2, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
-  } else if (mode === 'levitation') {
-    const original = document.createElement('canvas'); original.width = width; original.height = height; original.getContext('2d').drawImage(canvas, 0, 0);
-    ctx.save(); ctx.globalAlpha = 0.72 + intensity * 0.28; ctx.drawImage(layer, 0, 0); ctx.restore();
-    const subjectWidth = width * 0.62 * scale; const subjectHeight = height * 0.72 * scale;
-    const x = width / 2 - subjectWidth / 2 + direction * width * 0.12; const y = height * 0.42 - subjectHeight / 2;
-    ctx.save(); ctx.beginPath(); ctx.ellipse(x + subjectWidth / 2, y + subjectHeight / 2, subjectWidth / 2, subjectHeight / 2, 0, 0, Math.PI * 2); ctx.clip();
-    ctx.filter = `blur(${softness * 1.5}px)`; ctx.drawImage(original, x, y - height * intensity * 0.08, subjectWidth, subjectHeight); ctx.restore();
-    ctx.save(); ctx.globalAlpha = 0.18 + intensity * 0.18; ctx.filter = `blur(${10 + softness * 24}px)`; ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.ellipse(width / 2 + direction * width * 0.1, height * 0.83, subjectWidth * 0.35, height * 0.025, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-  }
+  // Multi-image composite modes were intentionally removed; the studio now keeps only single-photo treatments.
 }
 
 function renderSourceToCanvas(source, canvas, params = DEFAULT_PARAMS, seed = 20260516) {
@@ -578,6 +566,7 @@ function renderSourceToCanvas(source, canvas, params = DEFAULT_PARAMS, seed = 20
 
   let imageData = internalContext.getImageData(0, 0, internalWidth, internalHeight);
   imageData = applyPhotonPixels(imageData, params, seed);
+  imageData = reduceNoise(imageData, params.noiseCancellation);
   imageData = unsharpMask(imageData, params.sharpenAmount);
   internalContext.putImageData(imageData, 0, 0);
   applyBloom(internalCanvas, params);
@@ -591,7 +580,7 @@ function renderSourceToCanvas(source, canvas, params = DEFAULT_PARAMS, seed = 20
   const artifactData = outputContext.getImageData(0, 0, outputWidth, outputHeight);
   outputContext.putImageData(applyArtifactPixels(artifactData, params, seed + 31), 0, 0);
   applyCreativeEffect(canvas, params, seed + 47);
-  drawTimestamp(canvas, params.timestampDate ? new Date(params.timestampDate) : new Date());
+  drawTimestamp(canvas, params.timestampDate ? new Date(params.timestampDate) : new Date(), params.stampName);
 }
 
 function renderRawPreview(source, canvas, params = DEFAULT_PARAMS) {
@@ -751,6 +740,9 @@ function currentParams() {
     contrast: Number(document.getElementById('contrastControl')?.value || DEFAULT_PARAMS.contrast),
     lumaNoise: Number(document.getElementById('grainControl')?.value || DEFAULT_PARAMS.lumaNoise),
     shadowCyan: Number(document.getElementById('cyanControl')?.value || DEFAULT_PARAMS.shadowCyan),
+    noiseCancellation: Number(document.getElementById('noiseCancelControl')?.value || DEFAULT_PARAMS.noiseCancellation),
+    sharpenAmount: Number(document.getElementById('sharpnessControl')?.value || DEFAULT_PARAMS.sharpenAmount),
+    stampName: document.getElementById('stampNameControl')?.value || DEFAULT_PARAMS.stampName,
     orderedDitherStrength: Number(document.getElementById('ditherControl')?.value || DEFAULT_PARAMS.orderedDitherStrength),
     chromaticAberration: Number(document.getElementById('aberrationControl')?.value || DEFAULT_PARAMS.chromaticAberration),
     scanlineStrength: Number(document.getElementById('scanlineControl')?.value || DEFAULT_PARAMS.scanlineStrength),
@@ -763,8 +755,6 @@ function currentParams() {
     effectMode: document.querySelector('[data-effect].active')?.dataset.effect || 'classic',
     effectIntensity: Number(document.getElementById('effectIntensityControl')?.value || 0.68),
     effectDirection: Number(document.getElementById('effectDirectionControl')?.value || 0.45),
-    effectScale: Number(document.getElementById('effectScaleControl')?.value || 0.86),
-    effectSoftness: Number(document.getElementById('effectSoftnessControl')?.value || 0.35),
     timestampDate: document.getElementById('timestampNow')?.checked ? null : document.getElementById('customTimestamp')?.value || null,
   };
 }
@@ -796,13 +786,41 @@ function initialize() {
   let hasUserImage = false;
   let loadRequestId = 0;
   let activeObjectUrl = null;
-  let activeSecondarySource = null;
-  let secondaryObjectUrl = null;
 
   const setStatus = (message, state = '') => {
     if (!uploadStatus) return;
     uploadStatus.textContent = message;
     uploadStatus.dataset.state = state;
+  };
+
+  const wallStatus = document.getElementById('wallStatus');
+  const profileForm = document.getElementById('profileForm');
+  const activeProfile = document.getElementById('activeProfile');
+  let wallProfile = localStorage.getItem('alamsDumpWallProfile') || '';
+
+  const setWallStatus = (message, state = '') => {
+    if (!wallStatus) return;
+    wallStatus.textContent = message;
+    wallStatus.dataset.state = state;
+  };
+
+  const updateWallProfile = () => {
+    const signedIn = Boolean(wallProfile);
+    if (profileForm) profileForm.hidden = signedIn;
+    if (activeProfile) activeProfile.hidden = !signedIn;
+    const displayName = document.getElementById('profileDisplayName');
+    const monogram = document.getElementById('profileMonogram');
+    if (displayName) displayName.textContent = wallProfile || 'Guest';
+    if (monogram) monogram.textContent = (wallProfile || 'AD').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+    document.getElementById('wallPassport')?.classList.toggle('is-signed-in', signedIn);
+    setWallStatus(signedIn ? `Signed in as ${wallProfile}. Your reactions and notes leave a profile trace.` : 'Viewing is open. Wall actions require a profile.', signedIn ? 'success' : '');
+  };
+
+  const requireWallProfile = () => {
+    if (wallProfile) return true;
+    setWallStatus('Create a wall profile first. Looking is open; leaving a trace requires a name.', 'locked');
+    document.getElementById('wallPassport')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
   };
 
   const resizeEditorCanvases = (params) => {
@@ -820,7 +838,7 @@ function initialize() {
   };
 
   const renderOutput = () => {
-    const params = { ...currentParams(), secondarySource: activeSecondarySource };
+    const params = currentParams();
     resizeEditorCanvases(params);
     renderRawPreview(activeSource, sourcePreviewCanvas, params);
     renderSourceToCanvas(activeSource, outputCanvas, params, renderSeed);
@@ -889,32 +907,9 @@ function initialize() {
     image.src = url;
   };
 
-  const loadSecondaryImage = (file) => {
-    if (!file) return;
-    if (!isSupportedImageFile(file)) {
-      setStatus('The second layer must be a browser-supported image.', 'error');
-      return;
-    }
-    if (secondaryObjectUrl) URL.revokeObjectURL(secondaryObjectUrl);
-    const url = URL.createObjectURL(file);
-    secondaryObjectUrl = url;
-    const image = new Image();
-    image.decoding = 'async';
-    image.onload = () => {
-      activeSecondarySource = image;
-      document.getElementById('secondarySource')?.classList.add('is-ready');
-      const hint = document.getElementById('secondaryHint');
-      if (hint) hint.textContent = `${file.name || 'Second image'} ready as the composite layer.`;
-      renderUserEdit();
-      setStatus('Second image loaded. Choose Surreal, Double exposure, or Levitation to combine it.', 'success');
-    };
-    image.onerror = () => setStatus('The second image could not be decoded.', 'error');
-    image.src = url;
-  };
-
   renderAll();
 
-  ['contrastControl', 'grainControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl', 'cropPositionControl', 'motionControl', 'effectIntensityControl', 'effectDirectionControl', 'effectScaleControl', 'effectSoftnessControl'].forEach((id) => {
+  ['contrastControl', 'grainControl', 'noiseCancelControl', 'sharpnessControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl', 'cropPositionControl', 'motionControl', 'effectIntensityControl', 'effectDirectionControl'].forEach((id) => {
     document.getElementById(id)?.addEventListener('input', renderUserEdit);
   });
 
@@ -940,6 +935,7 @@ function initialize() {
     renderUserEdit();
   });
   customTimestamp?.addEventListener('input', renderUserEdit);
+  document.getElementById('stampNameControl')?.addEventListener('input', renderUserEdit);
 
   ['imageInput', 'cameraInput'].forEach((id) => {
     document.getElementById(id)?.addEventListener('change', (event) => {
@@ -948,10 +944,6 @@ function initialize() {
     });
   });
 
-  document.getElementById('secondaryImageInput')?.addEventListener('change', (event) => {
-    loadSecondaryImage(event.target.files?.[0]);
-    event.target.value = '';
-  });
 
   ['dragenter', 'dragover'].forEach((eventName) => {
     dropZone?.addEventListener(eventName, (event) => {
@@ -980,6 +972,8 @@ function initialize() {
       const mapping = {
         contrastControl: values.contrast,
         grainControl: values.lumaNoise,
+        noiseCancelControl: values.noiseCancellation,
+        sharpnessControl: values.sharpenAmount,
         cyanControl: values.shadowCyan,
         ditherControl: values.orderedDitherStrength,
         aberrationControl: values.chromaticAberration,
@@ -1038,8 +1032,8 @@ function initialize() {
     const file = new File([blob], `${activeFileName}-dumped.jpg`, { type: 'image/jpeg' });
     if (navigator.canShare?.({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: 'Alam’s Dump', text: 'A photo I wrecked in Alam’s Dump.' });
-        setStatus('Dump shared.', 'success');
+        await navigator.share({ files: [file], title: 'Alam’s Dump', text: 'A photo I edited in Alam’s Dump.' });
+        setStatus('Edit shared.', 'success');
       } catch (error) {
         if (error.name !== 'AbortError') setStatus('Sharing was blocked. Download the JPEG instead.', 'error');
       }
@@ -1049,20 +1043,31 @@ function initialize() {
   });
 
   document.getElementById('featureYes')?.addEventListener('click', () => {
-    if (!hasUserImage) return;
+    if (!hasUserImage || !requireWallProfile()) return;
     const gallery = document.getElementById('featuredGallery');
     const figure = document.createElement('figure');
-    figure.className = 'hanging-photo user-feature';
+    figure.className = 'hanging-photo wall-entry user-feature';
+    figure.dataset.entry = `session-${Date.now()}`;
     const image = new Image();
     image.src = outputCanvas.toDataURL('image/jpeg', 0.76);
     image.alt = 'A user-approved Alam’s Dump edit';
     const caption = document.createElement('figcaption');
-    caption.textContent = `${formatTimestamp(new Date()).line1} / APPROVED`;
-    figure.append(image, caption);
-    gallery.prepend(figure);
+    const captionTitle = document.createElement('strong');
+    captionTitle.textContent = formatTimestamp(new Date(), currentParams().stampName).line2;
+    const captionByline = document.createElement('span');
+    captionByline.textContent = `${wallProfile} · just added`;
+    caption.append(captionTitle, captionByline);
+    const actions = document.createElement('div');
+    actions.className = 'entry-actions';
+    actions.innerHTML = '<button type="button" data-wall-action="reaction">◌ mood <b>0</b></button><button type="button" data-wall-action="like">♡ keep <b>0</b></button><button type="button" data-wall-action="comment">+ note <b>0</b></button><button type="button" data-wall-action="share">↗ pass on</button>';
+    const notes = document.createElement('div');
+    notes.className = 'entry-notes';
+    figure.append(image, caption, actions, notes);
+    gallery.append(figure);
     document.getElementById('wallEmpty')?.remove();
     document.getElementById('featureAsk').hidden = true;
     setStatus('Added to the wall for this session.', 'success');
+    setWallStatus(`${wallProfile} added an approved edit to the contact sheet.`, 'success');
     document.getElementById('wall')?.scrollIntoView({ behavior: 'smooth' });
   });
 
@@ -1070,6 +1075,55 @@ function initialize() {
     document.getElementById('featureAsk').hidden = true;
     setStatus('Kept private.', 'success');
   });
+
+  profileForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const input = document.getElementById('profileName');
+    wallProfile = String(input?.value || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+    if (!wallProfile) return;
+    localStorage.setItem('alamsDumpWallProfile', wallProfile);
+    updateWallProfile();
+  });
+
+  document.getElementById('profileSignOut')?.addEventListener('click', () => {
+    wallProfile = '';
+    localStorage.removeItem('alamsDumpWallProfile');
+    updateWallProfile();
+  });
+
+  document.getElementById('featuredGallery')?.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-wall-action]');
+    if (!button || !requireWallProfile()) return;
+    const entry = button.closest('.wall-entry');
+    const action = button.dataset.wallAction;
+    if (action === 'comment') {
+      const note = window.prompt('Leave a short field note:');
+      if (!note?.trim()) return;
+      const notes = entry.querySelector('.entry-notes');
+      const paragraph = document.createElement('p');
+      const author = document.createElement('strong');
+      author.textContent = wallProfile;
+      paragraph.append(author, ` — ${note.trim().slice(0, 180)}`);
+      notes.append(paragraph);
+      const count = button.querySelector('b');
+      if (count) count.textContent = Number(count.textContent || 0) + 1;
+      setWallStatus('Field note added to this session.', 'success');
+      return;
+    }
+    if (action === 'share') {
+      const shareData = { title: 'The Wall · Alam’s Dump', text: `${wallProfile} passed on a photograph from the Alam’s Dump wall.`, url: `${location.href.split('#')[0]}#wall` };
+      if (navigator.share) await navigator.share(shareData).catch(() => {});
+      else await navigator.clipboard?.writeText(shareData.url);
+      setWallStatus('Wall link ready to pass on.', 'success');
+      return;
+    }
+    const count = button.querySelector('b');
+    if (!button.classList.contains('is-marked') && count) count.textContent = Number(count.textContent || 0) + 1;
+    button.classList.add('is-marked');
+    setWallStatus(action === 'like' ? 'Kept in your profile collection.' : 'Mood recorded under your profile.', 'success');
+  });
+
+  updateWallProfile();
 
   const rig = document.getElementById('cameraRig');
   window.addEventListener('pointermove', (event) => {
@@ -1100,6 +1154,7 @@ if (typeof module !== 'undefined') {
     applyNeonNoirPixels,
     applyGlitchPixels,
     unsharpMask,
+    reduceNoise,
     imageSignature,
     scoreSignature,
     isSupportedImageFile,

@@ -6,6 +6,7 @@ const {
   applyArtifactPixels,
   applyNeonNoirPixels,
   applyGlitchPixels,
+  reduceNoise,
   getCrop,
   formatTimestamp,
   rgbToHsl,
@@ -115,9 +116,10 @@ function testCropOptionsAndTimestamp() {
   assert.deepEqual(getCrop(1600, 900, 1), { sx: 350, sy: 0, sw: 900, sh: 900 });
   assert.deepEqual(getCrop(1600, 900, 1, 0), { sx: 0, sy: 0, sw: 900, sh: 900 });
   assert.deepEqual(getCrop(1600, 900, 1, 1), { sx: 700, sy: 0, sw: 900, sh: 900 });
-  const stamp = formatTimestamp(new Date(2026, 5, 6, 9, 8, 7));
+  const stamp = formatTimestamp(new Date(2026, 5, 6, 9, 8, 7), 'Mira');
   assert.equal(stamp.line1, '06 06 2026 09:08:07');
-  assert.match(stamp.line2, /ALAM’S DUMP$/);
+  assert.match(stamp.line2, /MIRA$/);
+  assert.match(formatTimestamp(new Date(2026, 5, 6, 9, 8, 7)).line2, /ALAM’S DUMP$/);
 }
 
 function testHueRemapping() {
@@ -179,6 +181,18 @@ function testCreativePixelEffects() {
   assert.notDeepEqual(glitchA.data, source.data, 'RGB glitch must split or displace source pixels');
 }
 
+
+function testNoiseCancellation() {
+  const noisy = makeImageData(5, 5, (x, y) => {
+    const value = (x === 2 && y === 2) ? 96 : 126;
+    return [value, value, value];
+  });
+  const beforeCenter = noisy.data[(2 * noisy.width + 2) * 4];
+  reduceNoise(noisy, 0.8);
+  const afterCenter = noisy.data[(2 * noisy.width + 2) * 4];
+  assert.ok(afterCenter > beforeCenter, `noise cancellation should smooth isolated pixels: ${beforeCenter} -> ${afterCenter}`);
+}
+
 function testImageFileValidation() {
   assert.equal(isSupportedImageFile({ type: 'image/jpeg' }), true, 'camera JPEGs should be accepted');
   assert.equal(isSupportedImageFile({ type: 'image/heic' }), true, 'browser-advertised image formats should reach the decoder');
@@ -194,7 +208,9 @@ function testMergedUiContract() {
   const html = fs.readFileSync(require.resolve('../index.html'), 'utf8');
   assert.match(appSource, /const renderUserEdit = /, 'editor event handlers need renderUserEdit after conflict resolution');
   assert.match(appSource, /let hasUserImage = false/, 'wall consent flow needs its user-image state after conflict resolution');
-  ['featuredGallery', 'wallDemoA', 'wallDemoB'].forEach((id) => {
+  assert.doesNotMatch(html, /surreal|doubleExposure|levitation/i, 'removed composite templates must stay out of the UI contract');
+  assert.match(appSource, /requireWallProfile\(\)/, 'wall interactions must remain gated behind a profile');
+  ['featuredGallery', 'wallDemoA', 'wallDemoB', 'profileForm', 'activeProfile', 'wallStatus'].forEach((id) => {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} must remain in the page while app.js references it`);
   });
 }
@@ -218,6 +234,7 @@ testHueRemapping();
 testDeterministicPhotonDamage();
 testAdvancedArtifacts();
 testCreativePixelEffects();
+testNoiseCancellation();
 testImageFileValidation();
 testMergedUiContract();
 testReferenceSignatureContract();
