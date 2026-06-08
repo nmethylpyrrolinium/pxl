@@ -227,9 +227,13 @@ function testMergedUiContract() {
   assert.match(appSource, /IntersectionObserver/, 'expensive below-the-fold editor work should render lazily');
   assert.match(appSource, /maxLongEdge = 720/, 'extreme original aspect ratios must not create unbounded editor canvases');
   assert.match(html, /<script src=["']app\.js["'] defer>/, 'application JavaScript should not block HTML parsing');
-  ['featuredGallery', 'wall', 'wallDemoA', 'wallDemoB'].forEach((id) => {
-    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} must remain in the page while app.js references it`);
+  ['featuredGallery', 'wall', 'wallTrack', 'wallLightbox'].forEach((id) => {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} must remain in the interactive wall`);
   });
+  assert.doesNotMatch(html, /id=["'](?:demoCanvas|wallDemoA|wallDemoB)["']/, 'placeholder wall photos must not return');
+  assert.match(appSource, /data-wall-clone/, 'wall photos should loop continuously using a cloned track');
+  assert.match(appSource, /event\.deltaY/, 'vertical wheel motion should move the wall horizontally');
+  assert.match(appSource, /showModal\(\)/, 'clicking a wall photo should open the full image');
 }
 
 function testReferenceSignatureContract() {

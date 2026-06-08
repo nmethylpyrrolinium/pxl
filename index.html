@@ -73,24 +73,21 @@
             <span class="hanging-tassel tassel-two"></span>
             <span class="hanging-tassel tassel-three"></span>
           </div>
-          <div class="living-wall" id="featuredGallery" aria-live="polite">
-            <svg class="wall-rope" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="M 0 27 Q 21 42 38 31 T 70 25 T 100 32" /></svg>
-            <div class="wall-orbit orbit-one" aria-hidden="true"></div>
-            <div class="wall-orbit orbit-two" aria-hidden="true"></div>
-            <figure class="living-photo photo-main">
-              <canvas id="demoCanvas" width="410" height="547"></canvas>
-              <figcaption>ALAM’S DUMP / 19:41</figcaption>
-            </figure>
-            <figure class="living-photo photo-left">
-              <canvas id="wallDemoA" width="410" height="547"></canvas>
-              <figcaption>AFTER RAIN / 19:42</figcaption>
-            </figure>
-            <figure class="living-photo photo-right">
-              <canvas id="wallDemoB" width="410" height="547"></canvas>
-              <figcaption>HEAT MEMORY / 20:06</figcaption>
-            </figure>
-            <span class="wall-label">THE LIVING WALL · ALWAYS IN MOTION</span>
+          <div class="living-wall" id="featuredGallery" aria-live="polite" tabindex="0" aria-label="User photo wall. Scroll or drag to move along the rope.">
+            <div class="wall-rope" aria-hidden="true"></div>
+            <div class="wall-track" id="wallTrack"></div>
+            <div class="wall-empty" id="wallEmpty">
+              <strong>The rope is waiting.</strong>
+              <span>Hang the first user photo from the editor below.</span>
+            </div>
+            <div class="wall-guide" aria-hidden="true"><span>SCROLL / DRAG</span><i></i><span>CLICK TO OPEN</span></div>
+            <button class="wall-pause" id="wallPause" type="button" aria-pressed="false">Pause wall</button>
           </div>
+          <dialog class="wall-lightbox" id="wallLightbox" aria-label="Selected wall photo">
+            <button type="button" class="wall-lightbox-close" aria-label="Close photo">×</button>
+            <img alt="Selected user wall photo" />
+            <p></p>
+          </dialog>
         </div>
       </section>
 
