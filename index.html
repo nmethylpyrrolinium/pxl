@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#05070d" />
     <meta
       name="description"
-      content="Alam’s Dump is a private-feeling browser photo lab for turning everyday images into damaged digital keepsakes."
+      content="Alam’s Dump is a private-feeling browser photo lab for restoring and styling digital keepsakes."
     />
     <title>Alam’s Dump — Digital Keepsake Lab</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -40,8 +40,8 @@
       <section class="hero section-shell">
         <div class="hero-copy">
           <p class="eyebrow">ALAM’S DUMP / 2026</p>
-          <h1>Photos look better with damage.</h1>
-          <p class="lede">Crop. Move. Timestamp. Dump.</p>
+          <h1>Photos look better with detail.</h1>
+          <p class="lede">Crop. Clean noise. Sharpen. Sign it.</p>
           <div class="hero-actions">
             <a class="button primary" href="#lab">Edit a photo</a>
             <a class="button ghost" href="#wall">See the wall</a>
@@ -56,8 +56,8 @@
               <dd>+14%</dd>
             </div>
             <div>
-              <dt>Noise σ</dt>
-              <dd>17px</dd>
+              <dt>Noise cancel</dt>
+              <dd>48%</dd>
             </div>
           </dl>
         </div>
@@ -88,11 +88,11 @@
       <section class="lab section-shell" id="lab">
         <div class="lab-copy">
           <p class="eyebrow">Live browser implementation</p>
-          <h2>Pick a photo. Wreck it locally. Keep the evidence.</h2>
+          <h2>Pick a photo. Restore it locally. Keep the evidence.</h2>
           <p>
             Use the controls to stress the forensic parameters. Processing uses
             Canvas ImageData, deterministic grain, HSL hue remapping, a shaped
-            tone LUT, ordered dither, bloom, unsharp masking, and a timestamp
+            tone LUT, ordered dither, bloom, adjustable sharpness, noise cancellation, and a timestamp
             compositor.
           </p>
           <div class="file-drop" id="dropZone">
@@ -138,24 +138,14 @@
           <div class="tool-section effect-studio">
             <span class="tool-label">Creative mode</span>
             <div class="effect-grid" id="effectRail" aria-label="Creative effect mode">
-              <button class="active" type="button" data-effect="classic"><strong>Classic damage</strong><small>Original photon treatment</small></button>
-              <button type="button" data-effect="surreal"><strong>Surreal composite</strong><small>Dreamlike portal overlay</small></button>
-              <button type="button" data-effect="doubleExposure"><strong>Double exposure</strong><small>Portrait + texture blend</small></button>
+              <button class="active" type="button" data-effect="classic"><strong>Classic detail</strong><small>Clean restoration base</small></button>
               <button type="button" data-effect="glitch"><strong>RGB glitch</strong><small>Channel split + signal tears</small></button>
-              <button type="button" data-effect="dispersion"><strong>Dispersion</strong><small>Directional particle shatter</small></button>
+              <button type="button" data-effect="dispersion"><strong>Pixel dispersion</strong><small>Directional sensor breakup</small></button>
               <button type="button" data-effect="neonNoir"><strong>Neon noir</strong><small>Cyan / magenta night grade</small></button>
-              <button type="button" data-effect="levitation"><strong>Levitation</strong><small>Clean-plate floating composite</small></button>
-            </div>
-            <div class="secondary-source" id="secondarySource">
-              <input id="secondaryImageInput" type="file" accept="image/*" />
-              <label class="upload-button" for="secondaryImageInput">Add second image</label>
-              <small id="secondaryHint">Used by surreal composite, double exposure, and levitation.</small>
             </div>
             <div class="control-grid effect-controls">
               <label>Effect intensity<input id="effectIntensityControl" type="range" min="0" max="1" step="0.01" value="0.68" /></label>
               <label>Direction / offset<input id="effectDirectionControl" type="range" min="-1" max="1" step="0.01" value="0.45" /></label>
-              <label>Overlay scale<input id="effectScaleControl" type="range" min="0.35" max="1.6" step="0.01" value="0.86" /></label>
-              <label>Mask softness<input id="effectSoftnessControl" type="range" min="0" max="1" step="0.01" value="0.35" /></label>
             </div>
           </div>
           <div class="tool-section">
@@ -176,15 +166,18 @@
               <button type="button" data-motion="shake">Shake</button>
               <button type="button" data-motion="ghost">Ghost</button>
               <button type="button" data-motion="trails">Trails</button>
-              <button type="button" data-motion="double">Double</button>
             </div>
             <label class="inline-range">Amount <input id="motionControl" type="range" min="0" max="1" step="0.01" value="0.45" /></label>
           </div>
-          <div class="tool-section timestamp-tool">
-            <span class="tool-label">Timestamp</span>
-            <label class="toggle-line"><input id="timestampNow" type="checkbox" checked /> Use my current local time</label>
-            <input id="customTimestamp" type="datetime-local" disabled aria-label="Custom timestamp" />
-          </div>
+          <details class="tool-section timestamp-tool">
+            <summary><span><span class="tool-label">Timeline</span><strong>Alam’s Dump stamp</strong></span><small>Customize name & date</small></summary>
+            <div class="timeline-options">
+              <label>Stamp name<input id="stampNameControl" type="text" maxlength="32" placeholder="Alam’s Dump" value="Alam’s Dump" /></label>
+              <small>Keep Alam’s Dump as-is, or replace it with your own name.</small>
+              <label class="toggle-line"><input id="timestampNow" type="checkbox" checked /> Use my current local time</label>
+              <input id="customTimestamp" type="datetime-local" disabled aria-label="Custom timestamp" />
+            </div>
+          </details>
           <div class="preset-rail" aria-label="Effect recipes">
             <button class="active" type="button" data-preset="reference">Reference</button>
             <button type="button" data-preset="night">Night signal</button>
@@ -194,6 +187,8 @@
           <div class="control-grid">
             <label>Contrast<input id="contrastControl" type="range" min="1" max="1.8" step="0.01" value="1.38" /></label>
             <label>Grain<input id="grainControl" type="range" min="0" max="32" step="1" value="17" /></label>
+            <label>Noise cancellation<input id="noiseCancelControl" type="range" min="0" max="1" step="0.01" value="0.48" /></label>
+            <label>Sharpness<input id="sharpnessControl" type="range" min="0" max="1.6" step="0.01" value="0.78" /></label>
             <label>Cyan shadow<input id="cyanControl" type="range" min="0" max="0.16" step="0.005" value="0.075" /></label>
             <label>Dither<input id="ditherControl" type="range" min="0" max="14" step="1" value="7" /></label>
             <label>Prism split<input id="aberrationControl" type="range" min="0" max="5" step="0.25" value="1.25" /></label>
@@ -214,12 +209,30 @@
       </section>
 
       <section class="photo-wall section-shell" id="wall">
-        <div class="wall-heading"><span class="eyebrow">FEATURED / WITH PERMISSION</span><h2>The wall.</h2><small>Session-only on this version.</small></div>
-        <div class="hanging-gallery" id="featuredGallery" aria-live="polite">
-          <figure class="hanging-photo placeholder"><canvas id="wallDemoA" width="410" height="547"></canvas><figcaption>ALAM’S DUMP</figcaption></figure>
-          <figure class="hanging-photo placeholder"><canvas id="wallDemoB" width="410" height="547"></canvas><figcaption>LOCAL / PRIVATE</figcaption></figure>
-          <p id="wallEmpty">Your approved edits hang here.</p>
+        <div class="wall-heading">
+          <div><span class="eyebrow">THE PUBLIC CONTACT SHEET / WITH PERMISSION</span><h2>The wall.</h2></div>
+          <small>A slow record of finished photographs, notes, and the people behind them.</small>
         </div>
+        <div class="wall-passport" id="wallPassport">
+          <div><span class="passport-mark">AD</span><p><strong>Your wall passport</strong><small>Anyone can look. A signed-in profile is required to feature, react, comment, like, or share.</small></p></div>
+          <form id="profileForm">
+            <input id="profileEmail" type="email" placeholder="Email for Supabase Auth" aria-label="Profile email" required />
+            <input id="profileName" type="text" maxlength="24" placeholder="Choose a display name" aria-label="Profile display name" required />
+            <button type="submit">Sign in / create profile</button>
+          </form>
+          <div class="active-profile" id="activeProfile" hidden><span id="profileMonogram">AD</span><p><strong id="profileDisplayName">Alam</strong><small>Wall member / session preview</small></p><button id="profileSignOut" type="button">Sign out</button></div>
+        </div>
+        <div class="wall-intro">
+          <article><strong>01 / Feature by consent</strong><span>Only approved edits enter the wall. Every entry keeps its maker’s profile attached.</span></article>
+          <article><strong>02 / Leave a trace</strong><span>Signed-in members can leave one-word reactions, thoughtful notes, likes, and shares.</span></article>
+          <article><strong>03 / Supabase collection</strong><span>Profiles, approved photographs, reactions, comments, and likes become the first connected tables.</span></article>
+        </div>
+        <div class="hanging-gallery" id="featuredGallery" aria-live="polite">
+          <figure class="hanging-photo wall-entry placeholder" data-entry="after-rain"><canvas id="wallDemoA" width="410" height="547"></canvas><figcaption><strong>AFTER RAIN, 19:42</strong><span>Alam · field note 001</span></figcaption><div class="entry-actions"><button type="button" data-wall-action="reaction">◌ mood <b>7</b></button><button type="button" data-wall-action="like">♡ keep <b>12</b></button><button type="button" data-wall-action="comment">+ note <b>2</b></button><button type="button" data-wall-action="share">↗ pass on</button></div><div class="entry-notes"><p>“The cyan in the shadows feels like the evening did.”</p></div></figure>
+          <figure class="hanging-photo wall-entry placeholder" data-entry="heat-memory"><canvas id="wallDemoB" width="410" height="547"></canvas><figcaption><strong>HEAT MEMORY, 20:06</strong><span>Guest archive · field note 002</span></figcaption><div class="entry-actions"><button type="button" data-wall-action="reaction">◌ mood <b>4</b></button><button type="button" data-wall-action="like">♡ keep <b>9</b></button><button type="button" data-wall-action="comment">+ note <b>1</b></button><button type="button" data-wall-action="share">↗ pass on</button></div><div class="entry-notes"><p>“Looks like a memory left in a warm car.”</p></div></figure>
+          <p id="wallEmpty">Your approved edits join the end of this contact sheet.</p>
+        </div>
+        <p class="wall-status" id="wallStatus" role="status" aria-live="polite">Viewing is open. Wall actions require a profile.</p>
       </section>
 
       <section class="rarities section-shell" aria-labelledby="raritiesTitle">
@@ -242,14 +255,14 @@
           <li><span>Tone</span>Exposure, black point, white point, gamma, and S-curve.</li>
           <li><span>Color</span>Cool matrix, cyan shadows, hue-selective remapping.</li>
           <li><span>Optics</span>Subtle bloom, vignette, radial prism split, and spatial heat leak.</li>
-          <li><span>Damage</span>Unsharp mask, RGB/luma noise, Bayer dither, scan field, sensor dust, and JPEG export.</li>
+          <li><span>Damage</span>Noise cancellation, controllable unsharp mask, RGB/luma grain, Bayer dither, scan field, sensor dust, and JPEG export.</li>
           <li><span>Metadata</span>Hard white two-line monospaced timestamp with black edge.</li>
         </ol>
       </section>
     </main>
 
     <footer class="site-footer">
-      <p>Alam’s Dump — locally wrecking perfectly good photos since 2026.</p>
+      <p>Alam’s Dump — locally restoring and styling photos since 2026.</p>
       <a href="#top">Back to top</a>
     </footer>
 

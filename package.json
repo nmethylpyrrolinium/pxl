@@ -2,7 +2,7 @@
   "name": "alams-dump",
   "version": "1.0.0",
   "private": true,
-  "description": "A private-feeling browser photo lab for damaged digital keepsakes.",
+  "description": "A private-feeling browser photo lab for restoring and styling digital keepsakes.",
   "scripts": {
     "test": "node --check app.js && node tests/photon-signature.test.js",
     "serve": "python3 -m http.server 4173"
