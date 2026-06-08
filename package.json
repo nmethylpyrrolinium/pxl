@@ -4,7 +4,7 @@
   "private": true,
   "description": "A private-feeling browser photo lab for restoring and styling digital keepsakes.",
   "scripts": {
-    "test": "node --check app.js && node tests/photon-signature.test.js",
+    "test": "node --check app.js && node tests/photon-signature.test.js && node tests/admin-moderation-wiring.test.js",
     "serve": "python3 -m http.server 4173"
   }
 }

@@ -18,6 +18,8 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <section class="admin-shell" id="adminView" hidden aria-live="polite"></section>
+
     <div class="grain veil" aria-hidden="true"></div>
     <div class="orb orb-a" aria-hidden="true"></div>
     <div class="orb orb-b" aria-hidden="true"></div>
@@ -250,6 +252,29 @@
       </div>
       <a href="#top">Back to top</a>
     </footer>
+
+    <dialog class="notice-dialog" id="noticeDialog" aria-labelledby="noticeTitle">
+      <div class="notice-dialog-card">
+        <p class="eyebrow">A gentle heads-up</p>
+        <h2 id="noticeTitle">Notice from Alam’s Dump</h2>
+        <p id="noticeMessage"></p>
+        <button id="noticeDismiss" type="button">I understand</button>
+      </div>
+    </dialog>
+
+    <dialog class="notice-dialog" id="warningDialog" aria-labelledby="warningTitle">
+      <form class="notice-dialog-card warning-form" id="warningForm" method="dialog">
+        <p class="eyebrow">Moderation note</p>
+        <h2 id="warningTitle">Warn uploader or visitor</h2>
+        <label for="warningMessage">Message</label>
+        <textarea id="warningMessage" rows="5" maxlength="500" required>Your upload was removed because it may not follow the wall rules. Please keep Alam’s Dump safe and public-friendly.</textarea>
+        <p class="admin-feedback" id="warningFeedback" role="status"></p>
+        <div class="dialog-actions">
+          <button type="button" data-warning-cancel>Cancel</button>
+          <button type="submit">Send warning</button>
+        </div>
+      </form>
+    </dialog>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js" defer></script>

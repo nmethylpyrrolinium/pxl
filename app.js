@@ -6,7 +6,30 @@ const supabaseClient = typeof window !== 'undefined'
   ? window.supabase?.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
 
+const VISITOR_KEY = 'alams_dump_visitor_id';
+const DISMISSED_NOTICE_KEY = 'alams_dump_dismissed_notice_ids';
+let visitorId = null;
 let wallController = null;
+let appInitialized = false;
+let adminInitialized = false;
+let activeAdminUser = null;
+let activeAdminPhotos = [];
+let warningTargetPhoto = null;
+
+function getVisitorId() {
+  if (visitorId) return visitorId;
+  try {
+    visitorId = localStorage.getItem(VISITOR_KEY);
+    if (!visitorId) {
+      visitorId = crypto.randomUUID();
+      localStorage.setItem(VISITOR_KEY, visitorId);
+    }
+  } catch (error) {
+    console.warn('Visitor ID could not be persisted', error);
+    visitorId = crypto.randomUUID();
+  }
+  return visitorId;
+}
 
 function createWallController() {
   const wall = document.getElementById('featuredGallery');
@@ -136,7 +159,8 @@ async function loadApprovedWallPhotos() {
 
   gallery.querySelectorAll('[data-wall-remote="true"]').forEach((node) => node.remove());
 
-  data.forEach((row) => {
+  const uniqueRows = [...new Map((data || []).map((row) => [row.storage_path || row.image_url || row.id, row])).values()];
+  uniqueRows.forEach((row) => {
     const figure = document.createElement('figure');
     figure.className = 'living-photo photo-new';
     figure.dataset.wallRemote = 'true';
@@ -253,6 +277,281 @@ async function signInWithGoogle() {
 async function signOut() {
   if (!supabaseClient) return null;
   return supabaseClient.auth.signOut();
+}
+
+async function getCurrentUser() {
+  if (!supabaseClient) return null;
+  const { data, error } = await supabaseClient.auth.getUser();
+  if (error) throw error;
+  return data.user || null;
+}
+
+async function getCurrentProfile(userId) {
+  if (!supabaseClient || !userId) return null;
+  const { data, error } = await supabaseClient.from('profiles').select('*').eq('id', userId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function isCurrentUserAdmin() {
+  const user = await getCurrentUser();
+  if (!user) return { user: null, profile: null, isAdmin: false };
+  const profile = await getCurrentProfile(user.id);
+  return { user, profile, isAdmin: profile?.account_type === 'admin' };
+}
+
+async function signInAdmin() {
+  if (!supabaseClient) throw new Error('Supabase is unavailable.');
+  return supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: `${window.location.origin}${window.location.pathname}#admin` },
+  });
+}
+
+async function signOutAdmin() {
+  await signOut();
+  activeAdminUser = null;
+  activeAdminPhotos = [];
+  await renderAdminRoute();
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+}
+
+function shortId(value) {
+  return value ? `${String(value).slice(0, 8)}…` : '—';
+}
+
+function friendlyError(error, fallback) {
+  console.error(fallback, error);
+  return error?.message ? `${fallback} ${error.message}` : fallback;
+}
+
+function adminPhotoUrl(photo) {
+  if (photo.image_url) return photo.image_url;
+  if (!photo.storage_path || !supabaseClient) return '';
+  return supabaseClient.storage.from('wall-approved').getPublicUrl(photo.storage_path).data.publicUrl;
+}
+
+function adminIdentity(user, profile) {
+  return profile?.display_name || user?.user_metadata?.full_name || user?.email || 'Admin';
+}
+
+function renderAdminMessage(title, message, state = '') {
+  const view = document.getElementById('adminView');
+  if (!view) return;
+  view.innerHTML = `<div class="admin-auth"><p class="eyebrow">Hidden control room</p><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><p class="admin-feedback" data-state="${state}"></p><button type="button" data-admin-back>Back to public wall</button></div>`;
+}
+
+function adminCard(photo) {
+  const card = document.createElement('article');
+  card.className = 'admin-photo-card';
+  const warningDisabled = !photo.owner_id && !photo.visitor_id;
+  const scores = ['filter_score', 'safety_score', 'moderation_score'].filter((key) => photo[key] !== undefined && photo[key] !== null).map((key) => `${key}: ${photo[key]}`);
+  card.innerHTML = `
+    <img loading="lazy" alt="Moderation preview" />
+    <div class="admin-photo-copy">
+      <span class="status-pill" data-status="${photo.status || 'unknown'}">${photo.status || 'unknown'}</span>
+      <h2>${escapeHtml(photo.guest_name || 'Anonymous guest')}</h2>
+      <p>${escapeHtml(photo.caption || 'No caption')}</p>
+      <div class="admin-meta">
+        <span>Created: ${photo.created_at ? new Date(photo.created_at).toLocaleString() : '—'}</span>
+        <span>Visitor: ${shortId(photo.visitor_id)}</span>
+        <span>Owner: ${shortId(photo.owner_id)}</span>
+        ${scores.map((score) => `<span>${escapeHtml(score)}</span>`).join('')}
+        ${photo.storage_path ? `<span>Path: ${escapeHtml(photo.storage_path)}</span>` : ''}
+      </div>
+      <div class="admin-card-actions">
+        <button type="button" data-action="approve">Approve</button>
+        <button type="button" data-action="hide">Hide</button>
+        <button type="button" data-action="remove">Remove</button>
+        <button type="button" data-action="restore">Restore</button>
+        <button type="button" data-action="warn" ${warningDisabled ? 'disabled title="Cannot warn because this photo has no user or visitor ID."' : ''}>Warn</button>
+      </div>
+      <p class="admin-feedback" role="status"></p>
+    </div>`;
+  const preview = adminPhotoUrl(photo);
+  if (preview) card.querySelector('img').src = preview;
+  else card.querySelector('img').hidden = true;
+  card.querySelectorAll('[data-action]').forEach((button) => button.addEventListener('click', () => handleAdminAction(photo, button.dataset.action, card)));
+  return card;
+}
+
+function filterAdminPhotos() {
+  const status = document.getElementById('adminStatusFilter')?.value || 'all';
+  const search = document.getElementById('adminSearch')?.value.trim().toLowerCase() || '';
+  return activeAdminPhotos.filter((photo) => (status === 'all' || photo.status === status)
+    && (!search || `${photo.guest_name || ''} ${photo.caption || ''}`.toLowerCase().includes(search)));
+}
+
+function renderAdminGrid() {
+  const grid = document.getElementById('adminPhotoGrid');
+  if (!grid) return;
+  const photos = filterAdminPhotos();
+  grid.replaceChildren();
+  if (!photos.length) {
+    grid.innerHTML = '<p class="admin-empty">No photos found for this filter.</p>';
+    return;
+  }
+  photos.forEach((photo) => grid.append(adminCard(photo)));
+}
+
+async function loadAdminPhotos() {
+  const feedback = document.getElementById('adminFeedback');
+  if (feedback) feedback.textContent = 'Loading moderation queue…';
+  const { data, error } = await supabaseClient.from('wall_photos').select('*').order('created_at', { ascending: false }).limit(250);
+  if (error) throw error;
+  activeAdminPhotos = data || [];
+  if (feedback) feedback.textContent = `${activeAdminPhotos.length} photo${activeAdminPhotos.length === 1 ? '' : 's'} loaded.`;
+  renderAdminGrid();
+}
+
+function renderAdminDashboard(user, profile) {
+  const view = document.getElementById('adminView');
+  view.innerHTML = `<div class="admin-frame">
+    <header class="admin-header"><div><p class="eyebrow">Hidden control room</p><h1>Alam’s Dump Admin</h1><p>Signed in as ${escapeHtml(adminIdentity(user, profile))}</p></div>
+    <div class="admin-header-actions"><button type="button" data-admin-back>Back to public wall</button><button type="button" data-admin-logout>Logout</button></div></header>
+    <div class="admin-toolbar"><select id="adminStatusFilter" aria-label="Filter by status"><option value="all">All statuses</option><option value="approved">Approved</option><option value="pending">Pending</option><option value="archived">Archived</option><option value="rejected">Rejected</option><option value="draft">Draft</option></select><input id="adminSearch" type="search" placeholder="Search guest name or caption" /><button type="button" id="adminRefresh">Refresh</button><span class="admin-feedback" id="adminFeedback" role="status"></span></div>
+    <main class="admin-grid" id="adminPhotoGrid"><p class="admin-empty">Loading moderation queue…</p></main></div>`;
+  document.getElementById('adminStatusFilter').addEventListener('change', renderAdminGrid);
+  document.getElementById('adminSearch').addEventListener('input', renderAdminGrid);
+  document.getElementById('adminRefresh').addEventListener('click', () => loadAdminPhotos().catch((error) => { document.getElementById('adminFeedback').textContent = friendlyError(error, 'Photo refresh failed.'); }));
+}
+
+async function updatePhotoStatus(photo, action) {
+  const now = new Date().toISOString();
+  const updates = { status: { approve: 'approved', hide: 'archived', remove: 'rejected', restore: 'approved' }[action] };
+  if (action === 'approve' || action === 'restore') updates.approved_at = now;
+  if (action === 'remove') updates.removed_at = now;
+  if (action === 'restore') updates.removed_at = null;
+  let result = await supabaseClient.from('wall_photos').update(updates).eq('id', photo.id).select('*').single();
+  if (result.error && /approved_at|removed_at/i.test(result.error.message || '')) {
+    result = await supabaseClient.from('wall_photos').update({ status: updates.status }).eq('id', photo.id).select('*').single();
+  }
+  if (result.error) throw result.error;
+  activeAdminPhotos = activeAdminPhotos.map((item) => item.id === photo.id ? result.data : item);
+}
+
+async function handleAdminAction(photo, action, card) {
+  const feedback = card.querySelector('.admin-feedback');
+  if (action === 'warn') {
+    warningTargetPhoto = photo;
+    document.getElementById('warningFeedback').textContent = '';
+    document.getElementById('warningDialog').showModal();
+    return;
+  }
+  feedback.textContent = `${action[0].toUpperCase()}${action.slice(1)} in progress…`;
+  try {
+    await updatePhotoStatus(photo, action);
+    renderAdminGrid();
+  } catch (error) {
+    feedback.dataset.state = 'error';
+    feedback.textContent = friendlyError(error, 'Photo update failed.');
+  }
+}
+
+async function sendWarning(message) {
+  if (!warningTargetPhoto || (!warningTargetPhoto.owner_id && !warningTargetPhoto.visitor_id)) throw new Error('Cannot warn because this photo has no user or visitor ID.');
+  const notice = { message, active: true };
+  if (warningTargetPhoto.owner_id) notice.target_user_id = warningTargetPhoto.owner_id;
+  if (warningTargetPhoto.visitor_id) notice.visitor_id = warningTargetPhoto.visitor_id;
+  if (activeAdminUser?.id) notice.created_by = activeAdminUser.id;
+  let result = await supabaseClient.from('user_notices').insert(notice);
+  if (result.error && /created_by/i.test(result.error.message || '')) {
+    delete notice.created_by;
+    result = await supabaseClient.from('user_notices').insert(notice);
+  }
+  if (result.error) throw result.error;
+}
+
+async function renderAdminRoute() {
+  const view = document.getElementById('adminView');
+  if (!view) return;
+  const isAdminRoute = window.location.hash === '#admin';
+  document.body.classList.toggle('admin-route', isAdminRoute);
+  view.hidden = !isAdminRoute;
+  if (!isAdminRoute) {
+    loadApprovedWallPhotos();
+    checkActiveNotices();
+    return;
+  }
+  renderAdminMessage('Checking access…', 'Confirming your Supabase session.');
+  if (!supabaseClient) {
+    renderAdminMessage('Admin unavailable', 'Supabase could not be loaded.', 'error');
+    return;
+  }
+  try {
+    const { user, profile, isAdmin } = await isCurrentUserAdmin();
+    if (!user) {
+      renderAdminMessage('Alam’s Dump Admin', 'Sign in with the Google account configured in Supabase Auth.');
+      const box = view.querySelector('.admin-auth');
+      const login = document.createElement('button');
+      login.type = 'button'; login.textContent = 'Continue with Google'; login.dataset.adminLogin = '';
+      box.insertBefore(login, box.querySelector('[data-admin-back]'));
+      return;
+    }
+    if (!profile) { renderAdminMessage('Profile missing', 'Your authenticated account does not have a public.profiles row.', 'error'); return; }
+    if (!isAdmin) { renderAdminMessage('Not authorized.', 'This account is signed in but is not an admin.', 'error'); return; }
+    activeAdminUser = user;
+    renderAdminDashboard(user, profile);
+    await loadAdminPhotos();
+  } catch (error) {
+    renderAdminMessage('Session expired or unavailable', friendlyError(error, 'Could not verify admin access.'), 'error');
+  }
+}
+
+function dismissedNoticeIds() {
+  try { return JSON.parse(sessionStorage.getItem(DISMISSED_NOTICE_KEY) || '[]'); } catch { return []; }
+}
+
+async function checkActiveNotices() {
+  if (!supabaseClient || window.location.hash === '#admin') return;
+  const { data, error } = await supabaseClient.rpc('get_active_notices', { p_visitor_id: getVisitorId() });
+  if (error) { console.error('Unable to check notices', error); return; }
+  const dismissed = new Set(dismissedNoticeIds().map(String));
+  const notices = Array.isArray(data) ? data : data ? [data] : [];
+  const notice = notices.find((item) => !dismissed.has(String(item.id)));
+  if (!notice) return;
+  const dialog = document.getElementById('noticeDialog');
+  document.getElementById('noticeMessage').textContent = notice.message || 'Please keep uploads clean and public-friendly.';
+  dialog.dataset.noticeId = notice.id;
+  if (!dialog.open) dialog.showModal();
+}
+
+function initializeAdminAndNotices() {
+  if (adminInitialized) return;
+  adminInitialized = true;
+  getVisitorId();
+  document.addEventListener('click', async (event) => {
+    if (event.target.closest('[data-admin-back]')) { window.location.hash = '#top'; return; }
+    if (event.target.closest('[data-admin-login]')) {
+      const feedback = document.querySelector('#adminView .admin-feedback');
+      try { const { error } = await signInAdmin(); if (error) throw error; } catch (error) { feedback.dataset.state = 'error'; feedback.textContent = friendlyError(error, 'Login failed.'); }
+      return;
+    }
+    if (event.target.closest('[data-admin-logout]')) signOutAdmin().catch((error) => renderAdminMessage('Logout failed', friendlyError(error, 'Could not log out.'), 'error'));
+    if (event.target.closest('[data-warning-cancel]')) document.getElementById('warningDialog').close();
+  });
+  document.getElementById('noticeDismiss')?.addEventListener('click', () => {
+    const dialog = document.getElementById('noticeDialog');
+    const ids = new Set(dismissedNoticeIds().map(String));
+    if (dialog.dataset.noticeId) ids.add(String(dialog.dataset.noticeId));
+    sessionStorage.setItem(DISMISSED_NOTICE_KEY, JSON.stringify([...ids]));
+    dialog.close();
+    checkActiveNotices();
+  });
+  document.getElementById('warningForm')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const feedback = document.getElementById('warningFeedback');
+    try {
+      await sendWarning(document.getElementById('warningMessage').value.trim());
+      document.getElementById('warningDialog').close();
+    } catch (error) { feedback.dataset.state = 'error'; feedback.textContent = friendlyError(error, 'Warning insert failed.'); }
+  });
+  window.addEventListener('hashchange', renderAdminRoute);
+  supabaseClient?.auth.onAuthStateChange(() => { if (window.location.hash === '#admin') window.setTimeout(renderAdminRoute, 0); });
+  renderAdminRoute();
 }
 
 const DEFAULT_PARAMS = {
@@ -1027,6 +1326,8 @@ function isSupportedImageFile(file) {
 }
 
 function initialize() {
+  if (appInitialized) return;
+  appInitialized = true;
   const outputCanvas = document.getElementById('outputCanvas');
   const sourcePreviewCanvas = document.getElementById('sourceCanvas');
   const uploadStatus = document.getElementById('uploadStatus');
@@ -1349,6 +1650,7 @@ function initialize() {
       p_effect_recipe: params,
       p_filter_status: serverVerdict.status || 'allowed',
       p_filter_score: serverVerdict.score || 0,
+      p_visitor_id: getVisitorId(),
       p_filter_labels: {
         local: localVerdict.labels || {},
         server: serverVerdict.labels || {},
@@ -1396,7 +1698,7 @@ function initialize() {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('DOMContentLoaded', initialize);
+  window.addEventListener('DOMContentLoaded', () => { initializeAdminAndNotices(); initialize(); });
 }
 
 if (typeof module !== 'undefined') {
