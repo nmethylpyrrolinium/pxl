@@ -6,6 +6,117 @@ const supabaseClient = typeof window !== 'undefined'
   ? window.supabase?.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
 
+let wallController = null;
+
+function createWallController() {
+  const wall = document.getElementById('featuredGallery');
+  const track = document.getElementById('wallTrack');
+  const empty = document.getElementById('wallEmpty');
+  const pauseButton = document.getElementById('wallPause');
+  const lightbox = document.getElementById('wallLightbox');
+  if (!wall || !track) return null;
+
+  let offset = 0;
+  let cycleWidth = 0;
+  let paused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let pointerStart = 0;
+  let offsetStart = 0;
+  let dragged = false;
+  let lastFrame = performance.now();
+
+  const setPaused = (next) => {
+    paused = next;
+    wall.classList.toggle('is-paused', paused);
+    pauseButton.textContent = paused ? 'Play wall' : 'Pause wall';
+    pauseButton.setAttribute('aria-pressed', String(paused));
+  };
+
+  const normalizeOffset = () => {
+    if (!cycleWidth) return;
+    while (offset <= -cycleWidth) offset += cycleWidth;
+    while (offset > 0) offset -= cycleWidth;
+  };
+
+  const measure = () => {
+    const firstClone = track.querySelector('[data-wall-clone="true"]');
+    cycleWidth = firstClone ? firstClone.offsetLeft : track.scrollWidth / 2;
+    normalizeOffset();
+  };
+
+  const sync = () => {
+    track.querySelectorAll('[data-wall-clone="true"]').forEach((item) => item.remove());
+    const originals = [...track.querySelectorAll('[data-wall-item="true"]')];
+    empty.hidden = originals.length > 0;
+    wall.classList.toggle('has-photos', originals.length > 0);
+    if (!originals.length) {
+      cycleWidth = 0;
+      offset = 0;
+      return;
+    }
+    originals.forEach((item) => {
+      const clone = item.cloneNode(true);
+      clone.dataset.wallClone = 'true';
+      clone.removeAttribute('data-wall-item');
+      clone.setAttribute('aria-hidden', 'true');
+      track.append(clone);
+    });
+    requestAnimationFrame(measure);
+  };
+
+  const openPhoto = (figure) => {
+    const image = figure.querySelector('img');
+    if (!image || !lightbox) return;
+    setPaused(true);
+    lightbox.querySelector('img').src = image.currentSrc || image.src;
+    lightbox.querySelector('p').textContent = figure.querySelector('figcaption')?.textContent || 'User wall photo';
+    lightbox.showModal();
+  };
+
+  const tick = (time) => {
+    if (!paused && cycleWidth) offset -= Math.min(time - lastFrame, 40) * 0.025;
+    normalizeOffset();
+    track.style.transform = `translate3d(${offset}px, 0, 0)`;
+    lastFrame = time;
+    requestAnimationFrame(tick);
+  };
+
+  wall.addEventListener('wheel', (event) => {
+    if (!cycleWidth) return;
+    event.preventDefault();
+    offset -= (event.deltaY || event.deltaX) * 0.75;
+    normalizeOffset();
+  }, { passive: false });
+  wall.addEventListener('pointerdown', (event) => {
+    if (!cycleWidth) return;
+    pointerStart = event.clientX;
+    offsetStart = offset;
+    dragged = false;
+    wall.classList.add('is-dragging');
+    wall.setPointerCapture(event.pointerId);
+  });
+  wall.addEventListener('pointermove', (event) => {
+    if (!wall.hasPointerCapture(event.pointerId)) return;
+    const distance = event.clientX - pointerStart;
+    dragged ||= Math.abs(distance) > 5;
+    offset = offsetStart + distance;
+    normalizeOffset();
+  });
+  wall.addEventListener('pointerup', (event) => {
+    wall.classList.remove('is-dragging');
+    if (wall.hasPointerCapture(event.pointerId)) wall.releasePointerCapture(event.pointerId);
+    const figure = event.target.closest('.living-photo');
+    if (!dragged && figure) openPhoto(figure);
+  });
+  pauseButton?.addEventListener('click', () => setPaused(!paused));
+  lightbox?.querySelector('.wall-lightbox-close')?.addEventListener('click', () => lightbox.close());
+  lightbox?.addEventListener('click', (event) => { if (event.target === lightbox) lightbox.close(); });
+  window.addEventListener('resize', measure);
+  setPaused(paused);
+  requestAnimationFrame(tick);
+
+  return { sync };
+}
+
 async function loadApprovedWallPhotos() {
   if (!supabaseClient) return;
 
@@ -29,6 +140,7 @@ async function loadApprovedWallPhotos() {
     const figure = document.createElement('figure');
     figure.className = 'living-photo photo-new';
     figure.dataset.wallRemote = 'true';
+    figure.dataset.wallItem = 'true';
 
     const img = new Image();
     img.loading = 'lazy';
@@ -40,8 +152,9 @@ async function loadApprovedWallPhotos() {
     caption.textContent = row.caption || row.guest_name || row.display_name || 'ALAM’S DUMP';
 
     figure.append(img, caption);
-    gallery.append(figure);
+    document.getElementById('wallTrack')?.append(figure);
   });
+  wallController?.sync();
 }
 
 async function checkWallImage(blob) {
@@ -97,12 +210,13 @@ async function runLocalImageSafetyCheck(canvas) {
 }
 
 function appendLocalWallPreview() {
-  const gallery = document.getElementById('featuredGallery');
   const outputCanvas = document.getElementById('outputCanvas');
   if (!outputCanvas) return;
 
   const figure = document.createElement('figure');
   figure.className = 'living-photo photo-new';
+  figure.dataset.wallItem = 'true';
+  figure.dataset.wallRemote = 'true';
 
   const image = new Image();
   image.src = outputCanvas.toDataURL('image/jpeg', 0.76);
@@ -112,7 +226,8 @@ function appendLocalWallPreview() {
   caption.textContent = formatTimestamp(new Date(), currentParams().stampName).line2;
 
   figure.append(image, caption);
-  gallery?.append(figure);
+  document.getElementById('wallTrack')?.prepend(figure);
+  wallController?.sync();
 }
 
 // Optional future auth. Public wall posting does not require login.
@@ -912,7 +1027,6 @@ function isSupportedImageFile(file) {
 }
 
 function initialize() {
-  const demoCanvas = document.getElementById('demoCanvas');
   const outputCanvas = document.getElementById('outputCanvas');
   const sourcePreviewCanvas = document.getElementById('sourceCanvas');
   const uploadStatus = document.getElementById('uploadStatus');
@@ -979,19 +1093,6 @@ function initialize() {
     else window.setTimeout(callback, 80);
   };
 
-  const renderWallDemos = () => {
-    const wallDemoA = document.getElementById('wallDemoA');
-    const wallDemoB = document.getElementById('wallDemoB');
-    if (wallDemoA?.dataset.rendered !== 'true') {
-      renderSourceToCanvas(sourceCanvas, wallDemoA, { ...DEFAULT_PARAMS, motionStyle: 'ghost', motionAmount: 0.42 }, 20260405);
-      wallDemoA.dataset.rendered = 'true';
-    }
-    if (wallDemoB?.dataset.rendered !== 'true') {
-      renderSourceToCanvas(sourceCanvas, wallDemoB, { ...DEFAULT_PARAMS, motionStyle: 'trails', motionAmount: 0.48, lightLeakStrength: 0.28 }, 20260406);
-      wallDemoB.dataset.rendered = 'true';
-    }
-  };
-
   const renderAll = (source = activeSource, immediate = false) => {
     activeSource = source;
     renderUserEdit(immediate);
@@ -1044,8 +1145,6 @@ function initialize() {
     image.src = url;
   };
 
-  renderRawPreview(sourceCanvas, demoCanvas);
-  runWhenIdle(() => renderSourceToCanvas(sourceCanvas, demoCanvas, { ...DEFAULT_PARAMS, lumaNoise: 20, contrast: 1.46 }, 20260404));
 
   const lab = document.getElementById('lab');
   if ('IntersectionObserver' in window && lab) {
@@ -1059,7 +1158,8 @@ function initialize() {
     runWhenIdle(() => renderAll());
   }
 
-  runWhenIdle(renderWallDemos);
+  wallController = createWallController();
+  wallController?.sync();
   loadApprovedWallPhotos();
 
   ['contrastControl', 'grainControl', 'noiseCancelControl', 'sharpnessControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl', 'cropPositionControl', 'motionControl', 'effectIntensityControl', 'effectDirectionControl'].forEach((id) => {
