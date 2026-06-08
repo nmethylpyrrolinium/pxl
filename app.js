@@ -1,3 +1,145 @@
+const SUPABASE_URL = 'https://nuaiznwlgrkqjfroefsf.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ZQIfmK2lFsLDczpwWjCnxA_TpjFlLMW';
+const MODERATION_ENDPOINT = 'https://nuaiznwlgrkqjfroefsf.functions.supabase.co/moderate-wall-image';
+
+const supabaseClient = typeof window !== 'undefined'
+  ? window.supabase?.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+  : null;
+
+async function loadApprovedWallPhotos() {
+  if (!supabaseClient) return;
+
+  const { data, error } = await supabaseClient
+    .from('approved_wall_photos')
+    .select('*')
+    .order('approved_at', { ascending: false })
+    .limit(36);
+
+  if (error) {
+    console.error('Unable to load public wall', error);
+    return;
+  }
+
+  const gallery = document.getElementById('featuredGallery');
+  if (!gallery) return;
+
+  gallery.querySelectorAll('[data-wall-remote="true"]').forEach((node) => node.remove());
+
+  data.forEach((row) => {
+    const figure = document.createElement('figure');
+    figure.className = 'living-photo photo-new';
+    figure.dataset.wallRemote = 'true';
+
+    const img = new Image();
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.src = row.image_url;
+    img.alt = row.caption || 'Alam’s Dump public wall photo';
+
+    const caption = document.createElement('figcaption');
+    caption.textContent = row.caption || row.guest_name || row.display_name || 'ALAM’S DUMP';
+
+    figure.append(img, caption);
+    gallery.append(figure);
+  });
+}
+
+async function checkWallImage(blob) {
+  const form = new FormData();
+  form.append('image', blob, 'wall-photo.jpg');
+
+  try {
+    const response = await fetch(MODERATION_ENDPOINT, {
+      method: 'POST',
+      body: form,
+    });
+
+    if (!response.ok) {
+      return {
+        allowed: false,
+        status: 'hold',
+        score: 1,
+        labels: { endpointError: response.status },
+        reason: 'Image check failed.',
+      };
+    }
+
+    const verdict = await response.json();
+
+    return {
+      allowed: verdict.allowed === true && verdict.status === 'allowed',
+      status: verdict.status || 'hold',
+      score: Number(verdict.score || 0),
+      labels: verdict.labels || {},
+      reason: verdict.reason || '',
+    };
+  } catch (error) {
+    console.error('Wall image check failed', error);
+    return {
+      allowed: false,
+      status: 'hold',
+      score: 1,
+      labels: { clientError: String(error) },
+      reason: 'Image check failed.',
+    };
+  }
+}
+
+async function runLocalImageSafetyCheck(canvas) {
+  // Keep this function easy to upgrade later with a browser-side image safety model.
+  // For now return allowed. Later we can plug a model here before uploading.
+  return {
+    allowed: true,
+    status: 'allowed',
+    score: 0,
+    labels: { localCheck: 'placeholder' },
+  };
+}
+
+function appendLocalWallPreview() {
+  const gallery = document.getElementById('featuredGallery');
+  const outputCanvas = document.getElementById('outputCanvas');
+  if (!outputCanvas) return;
+
+  const figure = document.createElement('figure');
+  figure.className = 'living-photo photo-new';
+
+  const image = new Image();
+  image.src = outputCanvas.toDataURL('image/jpeg', 0.76);
+  image.alt = 'A user-approved Alam’s Dump edit on the living wall';
+
+  const caption = document.createElement('figcaption');
+  caption.textContent = formatTimestamp(new Date(), currentParams().stampName).line2;
+
+  figure.append(image, caption);
+  gallery?.append(figure);
+}
+
+// Optional future auth. Public wall posting does not require login.
+// Google Console later:
+// Authorized redirect URI: https://nuaiznwlgrkqjfroefsf.supabase.co/auth/v1/callback
+// Supabase Auth URL config later:
+// Site URL: https://nmethylpyrrolinium.github.io
+// Redirect allowlist:
+// https://nmethylpyrrolinium.github.io/alam-s-dump
+// https://nmethylpyrrolinium.github.io/alam-s-dump/
+// http://localhost:4173
+// http://localhost:4173/
+async function signInWithGoogle() {
+  if (!supabaseClient) return null;
+  return supabaseClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin + window.location.pathname,
+    },
+  });
+}
+
+async function signOut() {
+  if (!supabaseClient) return null;
+  return supabaseClient.auth.signOut();
+}
+
 const DEFAULT_PARAMS = {
   outputWidth: 410,
   outputHeight: 547,
@@ -918,6 +1060,7 @@ function initialize() {
   }
 
   runWhenIdle(renderWallDemos);
+  loadApprovedWallPhotos();
 
   ['contrastControl', 'grainControl', 'noiseCancelControl', 'sharpnessControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl', 'cropPositionControl', 'motionControl', 'effectIntensityControl', 'effectDirectionControl'].forEach((id) => {
     document.getElementById(id)?.addEventListener('input', () => renderUserEdit());
@@ -1053,21 +1196,77 @@ function initialize() {
     }
   });
 
-  document.getElementById('featureYes')?.addEventListener('click', () => {
+  document.getElementById('featureYes')?.addEventListener('click', async () => {
     if (!hasUserImage) return;
-    const gallery = document.getElementById('featuredGallery');
-    const figure = document.createElement('figure');
-    figure.className = 'living-photo photo-new';
-    const image = new Image();
-    image.src = outputCanvas.toDataURL('image/jpeg', 0.76);
-    image.alt = 'A user-approved Alam’s Dump edit swirling on the living wall';
-    const caption = document.createElement('figcaption');
-    caption.textContent = formatTimestamp(new Date(), currentParams().stampName).line2;
-    figure.append(image, caption);
-    gallery?.append(figure);
+
+    if (!supabaseClient) {
+      appendLocalWallPreview();
+      setStatus('Backend unavailable. Hanging locally only for this visit.', 'error');
+      return;
+    }
+
+    const blob = await outputBlob();
+    if (!blob) {
+      setStatus('Could not prepare this image for the wall.', 'error');
+      return;
+    }
+
+    setStatus('Checking image before hanging…', 'loading');
+
+    const localVerdict = await runLocalImageSafetyCheck(outputCanvas);
+    if (!localVerdict.allowed) {
+      setStatus('This image cannot be posted on the public wall.', 'error');
+      return;
+    }
+
+    const serverVerdict = await checkWallImage(blob);
+    if (!serverVerdict.allowed) {
+      setStatus(serverVerdict.reason || 'This image cannot be posted on the public wall.', 'error');
+      return;
+    }
+
+    const path = `guest/${crypto.randomUUID()}.jpg`;
+
+    const { error: uploadError } = await supabaseClient.storage
+      .from('wall-approved')
+      .upload(path, blob, {
+        contentType: 'image/jpeg',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('Wall upload failed', uploadError);
+      setStatus('Upload failed. Try again in a moment.', 'error');
+      return;
+    }
+
+    const params = currentParams();
+
+    const { error: rpcError } = await supabaseClient.rpc('submit_guest_wall_photo', {
+      p_storage_path: path,
+      p_caption: params.stampName || 'Alam’s Dump',
+      p_guest_name: params.stampName || 'guest',
+      p_effect_recipe: params,
+      p_filter_status: serverVerdict.status || 'allowed',
+      p_filter_score: serverVerdict.score || 0,
+      p_filter_labels: {
+        local: localVerdict.labels || {},
+        server: serverVerdict.labels || {},
+      },
+    });
+
+    if (rpcError) {
+      console.error('Wall record failed', rpcError);
+      setStatus('The image uploaded, but the wall record failed. Try again.', 'error');
+      return;
+    }
+
+    appendLocalWallPreview();
     document.getElementById('featureAsk').hidden = true;
-    setStatus('Approved and hanging on the open wall. No login needed.', 'success');
+    setStatus('Posted on the public wall.', 'success');
     document.getElementById('wall')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    loadApprovedWallPhotos();
   });
 
   document.getElementById('featureNo')?.addEventListener('click', () => {
@@ -1090,7 +1289,9 @@ function initialize() {
     reveals.forEach((element) => element.classList.add('is-visible'));
   }
 
-  // The open wall deliberately needs no account or archive detour.
+  // Optional future auth. Public wall posting does not require login.
+  document.getElementById('googleSignIn')?.addEventListener('click', signInWithGoogle);
+  document.getElementById('authSignOut')?.addEventListener('click', signOut);
 
 }
 

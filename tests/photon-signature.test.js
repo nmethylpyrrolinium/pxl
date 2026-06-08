@@ -215,7 +215,11 @@ function testMergedUiContract() {
   assert.doesNotMatch(html, /id="memoryTunnel"|Walk through the archive/, 'the wall experience must not be split into a wasteful archive section');
   assert.doesNotMatch(html, /id="googleLogin"|id="loginTrigger"/, 'hanging a photo must not require a login flow');
   assert.match(html, /class="wall-rope"/, 'dimensional detail should be integrated into the existing wall as a hanging rope');
-  assert.match(html, /No login needed/, 'wall consent must clearly support guests');
+  assert.match(html, /@supabase\/supabase-js@2/, 'Supabase browser client must load before the app');
+  assert.match(appSource, /submit_guest_wall_photo/, 'guest wall posts must use the anonymous RPC');
+  assert.match(appSource, /checkWallImage\(blob\)/, 'wall uploads must pass the server image gate');
+  assert.doesNotMatch(appSource, /service[_-]?role/i, 'client code must never contain a service-role key');
+  assert.match(html, /No sign-in needed/, 'wall consent must clearly support guests');
   assert.match(html, /id="contactSheetCanvas"[^>]*hidden/, 'the four-sheet canvas must be absent until requested');
   assert.match(appSource, /setAttribute\('aria-expanded', 'true'\)/, 'making a four-sheet must reveal and announce its output');
   assert.match(appSource, /figure.className = 'living-photo photo-new'/, 'approved edits should join the living wall as animated photos');

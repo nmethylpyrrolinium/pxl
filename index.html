@@ -210,7 +210,7 @@
             <button id="contactSheetButton" type="button" aria-expanded="false" aria-controls="contactSheetCanvas">Make 4-sheet</button>
           </div>
           <div class="feature-ask" id="featureAsk" hidden>
-            <div><strong>Hang this on the public wall?</strong><small>No login needed. Your approval makes it visible on the wall; connected deployments can publish it for everyone.</small></div>
+            <div><strong>Hang this on the public wall?</strong><small>Your edited image is checked first, then posted publicly. No sign-in needed.</small></div>
             <div><button id="featureYes" type="button">Approve &amp; hang</button><button id="featureNo" type="button">Keep private</button></div>
           </div>
           <canvas id="contactSheetCanvas" width="880" height="1200" hidden></canvas>
@@ -245,9 +245,16 @@
 
     <footer class="site-footer">
       <p>Alam’s Dump — locally restoring and styling photos since 2026.</p>
+      <!-- Optional future auth. Public wall posting does not require login. Remove hidden to enable later. -->
+      <div class="future-auth" id="futureAuth" hidden>
+        <span id="authUserDisplay">Signed out</span>
+        <button id="googleSignIn" type="button">Sign in with Google</button>
+        <button id="authSignOut" type="button">Sign out</button>
+      </div>
       <a href="#top">Back to top</a>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js" defer></script>
   </body>
 </html>
