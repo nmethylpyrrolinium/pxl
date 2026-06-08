@@ -793,36 +793,6 @@ function initialize() {
     uploadStatus.dataset.state = state;
   };
 
-  const wallStatus = document.getElementById('wallStatus');
-  const profileForm = document.getElementById('profileForm');
-  const activeProfile = document.getElementById('activeProfile');
-  let wallProfile = localStorage.getItem('alamsDumpWallProfile') || '';
-
-  const setWallStatus = (message, state = '') => {
-    if (!wallStatus) return;
-    wallStatus.textContent = message;
-    wallStatus.dataset.state = state;
-  };
-
-  const updateWallProfile = () => {
-    const signedIn = Boolean(wallProfile);
-    if (profileForm) profileForm.hidden = signedIn;
-    if (activeProfile) activeProfile.hidden = !signedIn;
-    const displayName = document.getElementById('profileDisplayName');
-    const monogram = document.getElementById('profileMonogram');
-    if (displayName) displayName.textContent = wallProfile || 'Guest';
-    if (monogram) monogram.textContent = (wallProfile || 'AD').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
-    document.getElementById('wallPassport')?.classList.toggle('is-signed-in', signedIn);
-    setWallStatus(signedIn ? `Signed in as ${wallProfile}. Your reactions and notes leave a profile trace.` : 'Viewing is open. Wall actions require a profile.', signedIn ? 'success' : '');
-  };
-
-  const requireWallProfile = () => {
-    if (wallProfile) return true;
-    setWallStatus('Create a wall profile first. Looking is open; leaving a trace requires a name.', 'locked');
-    document.getElementById('wallPassport')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    return false;
-  };
-
   const resizeEditorCanvases = (params) => {
     const sourceWidth = activeSource.naturalWidth || activeSource.width || DEFAULT_PARAMS.outputWidth;
     const sourceHeight = activeSource.naturalHeight || activeSource.height || DEFAULT_PARAMS.outputHeight;
@@ -947,17 +917,7 @@ function initialize() {
     runWhenIdle(() => renderAll());
   }
 
-  const wall = document.getElementById('wall');
-  if ('IntersectionObserver' in window && wall) {
-    const wallObserver = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      wallObserver.disconnect();
-      runWhenIdle(renderWallDemos);
-    }, { rootMargin: '500px 0px' });
-    wallObserver.observe(wall);
-  } else {
-    runWhenIdle(renderWallDemos);
-  }
+  runWhenIdle(renderWallDemos);
 
   ['contrastControl', 'grainControl', 'noiseCancelControl', 'sharpnessControl', 'cyanControl', 'ditherControl', 'aberrationControl', 'scanlineControl', 'dustControl', 'leakControl', 'cropPositionControl', 'motionControl', 'effectIntensityControl', 'effectDirectionControl'].forEach((id) => {
     document.getElementById(id)?.addEventListener('input', () => renderUserEdit());
@@ -1093,32 +1053,20 @@ function initialize() {
   });
 
   document.getElementById('featureYes')?.addEventListener('click', () => {
-    if (!hasUserImage || !requireWallProfile()) return;
+    if (!hasUserImage) return;
     const gallery = document.getElementById('featuredGallery');
     const figure = document.createElement('figure');
-    figure.className = 'hanging-photo wall-entry user-feature';
-    figure.dataset.entry = `session-${Date.now()}`;
+    figure.className = 'living-photo photo-new';
     const image = new Image();
     image.src = outputCanvas.toDataURL('image/jpeg', 0.76);
-    image.alt = 'A user-approved Alam’s Dump edit';
+    image.alt = 'A user-approved Alam’s Dump edit swirling on the living wall';
     const caption = document.createElement('figcaption');
-    const captionTitle = document.createElement('strong');
-    captionTitle.textContent = formatTimestamp(new Date(), currentParams().stampName).line2;
-    const captionByline = document.createElement('span');
-    captionByline.textContent = `${wallProfile} · just added`;
-    caption.append(captionTitle, captionByline);
-    const actions = document.createElement('div');
-    actions.className = 'entry-actions';
-    actions.innerHTML = '<button type="button" data-wall-action="reaction">◌ mood <b>0</b></button><button type="button" data-wall-action="like">♡ keep <b>0</b></button><button type="button" data-wall-action="comment">+ note <b>0</b></button><button type="button" data-wall-action="share">↗ pass on</button>';
-    const notes = document.createElement('div');
-    notes.className = 'entry-notes';
-    figure.append(image, caption, actions, notes);
-    gallery.append(figure);
-    document.getElementById('wallEmpty')?.remove();
+    caption.textContent = formatTimestamp(new Date(), currentParams().stampName).line2;
+    figure.append(image, caption);
+    gallery?.append(figure);
     document.getElementById('featureAsk').hidden = true;
-    setStatus('Added to the wall for this session.', 'success');
-    setWallStatus(`${wallProfile} added an approved edit to the contact sheet.`, 'success');
-    document.getElementById('wall')?.scrollIntoView({ behavior: 'smooth' });
+    setStatus('Added to the living wall for this session.', 'success');
+    document.getElementById('wall')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
 
   document.getElementById('featureNo')?.addEventListener('click', () => {
@@ -1126,62 +1074,6 @@ function initialize() {
     setStatus('Kept private.', 'success');
   });
 
-  profileForm?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const input = document.getElementById('profileName');
-    wallProfile = String(input?.value || '').trim().replace(/\s+/g, ' ').slice(0, 24);
-    if (!wallProfile) return;
-    localStorage.setItem('alamsDumpWallProfile', wallProfile);
-    updateWallProfile();
-  });
-
-  document.getElementById('profileSignOut')?.addEventListener('click', () => {
-    wallProfile = '';
-    localStorage.removeItem('alamsDumpWallProfile');
-    updateWallProfile();
-  });
-
-  document.getElementById('featuredGallery')?.addEventListener('click', async (event) => {
-    const button = event.target.closest('[data-wall-action]');
-    if (!button || !requireWallProfile()) return;
-    const entry = button.closest('.wall-entry');
-    const action = button.dataset.wallAction;
-    if (action === 'comment') {
-      const note = window.prompt('Leave a short field note:');
-      if (!note?.trim()) return;
-      const notes = entry.querySelector('.entry-notes');
-      const paragraph = document.createElement('p');
-      const author = document.createElement('strong');
-      author.textContent = wallProfile;
-      paragraph.append(author, ` — ${note.trim().slice(0, 180)}`);
-      notes.append(paragraph);
-      const count = button.querySelector('b');
-      if (count) count.textContent = Number(count.textContent || 0) + 1;
-      setWallStatus('Field note added to this session.', 'success');
-      return;
-    }
-    if (action === 'share') {
-      const shareData = { title: 'The Wall · Alam’s Dump', text: `${wallProfile} passed on a photograph from the Alam’s Dump wall.`, url: `${location.href.split('#')[0]}#wall` };
-      if (navigator.share) await navigator.share(shareData).catch(() => {});
-      else await navigator.clipboard?.writeText(shareData.url);
-      setWallStatus('Wall link ready to pass on.', 'success');
-      return;
-    }
-    const count = button.querySelector('b');
-    if (!button.classList.contains('is-marked') && count) count.textContent = Number(count.textContent || 0) + 1;
-    button.classList.add('is-marked');
-    setWallStatus(action === 'like' ? 'Kept in your profile collection.' : 'Mood recorded under your profile.', 'success');
-  });
-
-  updateWallProfile();
-
-  const rig = document.getElementById('cameraRig');
-  window.addEventListener('pointermove', (event) => {
-    if (!rig || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const x = (event.clientX / window.innerWidth - 0.5) * 9;
-    const y = (event.clientY / window.innerHeight - 0.5) * -7;
-    rig.style.setProperty('rotate', `${y}deg ${x}deg`);
-  });
 }
 
 if (typeof window !== 'undefined') {

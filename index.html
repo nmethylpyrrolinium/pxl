@@ -62,25 +62,23 @@
           </dl>
         </div>
 
-        <div class="hero-stage" aria-label="Three-dimensional photon camera sculpture">
-          <div class="camera-rig" id="cameraRig">
-            <div class="phone-frame">
-              <div class="scanline"></div>
+        <div class="hero-stage" id="wall" aria-label="A living wall of swirling finished photographs">
+          <div class="living-wall" id="featuredGallery" aria-live="polite">
+            <div class="wall-orbit orbit-one" aria-hidden="true"></div>
+            <div class="wall-orbit orbit-two" aria-hidden="true"></div>
+            <figure class="living-photo photo-main">
               <canvas id="demoCanvas" width="410" height="547"></canvas>
-              <div class="timestamp-float">
-                <span>05 16 2026 19:41:50</span>
-                <span>3Y 66D 13:18:10</span>
-              </div>
-            </div>
-            <div class="lens-stack">
-              <span class="lens-ring ring-1"></span>
-              <span class="lens-ring ring-2"></span>
-              <span class="lens-ring ring-3"></span>
-              <span class="lens-core"></span>
-            </div>
-            <div class="photon-ribbon ribbon-a"></div>
-            <div class="photon-ribbon ribbon-b"></div>
-            <div class="photon-ribbon ribbon-c"></div>
+              <figcaption>ALAM’S DUMP / 19:41</figcaption>
+            </figure>
+            <figure class="living-photo photo-left">
+              <canvas id="wallDemoA" width="410" height="547"></canvas>
+              <figcaption>AFTER RAIN / 19:42</figcaption>
+            </figure>
+            <figure class="living-photo photo-right">
+              <canvas id="wallDemoB" width="410" height="547"></canvas>
+              <figcaption>HEAT MEMORY / 20:06</figcaption>
+            </figure>
+            <span class="wall-label">THE LIVING WALL · ALWAYS IN MOTION</span>
           </div>
         </div>
       </section>
@@ -201,38 +199,11 @@
             <button id="contactSheetButton" type="button">Make sheet</button>
           </div>
           <div class="feature-ask" id="featureAsk" hidden>
-            <div><strong>Put this on the wall?</strong><small>Only shown in this browser session. Nothing is uploaded.</small></div>
+            <div><strong>Put this on the wall?</strong><small>It joins the living wall in this browser session. Nothing is uploaded.</small></div>
             <div><button id="featureYes" type="button">Yes, feature it</button><button id="featureNo" type="button">Not now</button></div>
           </div>
           <canvas id="contactSheetCanvas" width="880" height="1200" hidden></canvas>
         </div>
-      </section>
-
-      <section class="photo-wall section-shell" id="wall">
-        <div class="wall-heading">
-          <div><span class="eyebrow">THE PUBLIC CONTACT SHEET / WITH PERMISSION</span><h2>The wall.</h2></div>
-          <small>A slow record of finished photographs, notes, and the people behind them.</small>
-        </div>
-        <div class="wall-passport" id="wallPassport">
-          <div><span class="passport-mark">AD</span><p><strong>Your wall passport</strong><small>Anyone can look. A signed-in profile is required to feature, react, comment, like, or share.</small></p></div>
-          <form id="profileForm">
-            <input id="profileEmail" type="email" placeholder="Email for Supabase Auth" aria-label="Profile email" required />
-            <input id="profileName" type="text" maxlength="24" placeholder="Choose a display name" aria-label="Profile display name" required />
-            <button type="submit">Sign in / create profile</button>
-          </form>
-          <div class="active-profile" id="activeProfile" hidden><span id="profileMonogram">AD</span><p><strong id="profileDisplayName">Alam</strong><small>Wall member / session preview</small></p><button id="profileSignOut" type="button">Sign out</button></div>
-        </div>
-        <div class="wall-intro">
-          <article><strong>01 / Feature by consent</strong><span>Only approved edits enter the wall. Every entry keeps its maker’s profile attached.</span></article>
-          <article><strong>02 / Leave a trace</strong><span>Signed-in members can leave one-word reactions, thoughtful notes, likes, and shares.</span></article>
-          <article><strong>03 / Supabase collection</strong><span>Profiles, approved photographs, reactions, comments, and likes become the first connected tables.</span></article>
-        </div>
-        <div class="hanging-gallery" id="featuredGallery" aria-live="polite">
-          <figure class="hanging-photo wall-entry placeholder" data-entry="after-rain"><canvas id="wallDemoA" width="410" height="547"></canvas><figcaption><strong>AFTER RAIN, 19:42</strong><span>Alam · field note 001</span></figcaption><div class="entry-actions"><button type="button" data-wall-action="reaction">◌ mood <b>7</b></button><button type="button" data-wall-action="like">♡ keep <b>12</b></button><button type="button" data-wall-action="comment">+ note <b>2</b></button><button type="button" data-wall-action="share">↗ pass on</button></div><div class="entry-notes"><p>“The cyan in the shadows feels like the evening did.”</p></div></figure>
-          <figure class="hanging-photo wall-entry placeholder" data-entry="heat-memory"><canvas id="wallDemoB" width="410" height="547"></canvas><figcaption><strong>HEAT MEMORY, 20:06</strong><span>Guest archive · field note 002</span></figcaption><div class="entry-actions"><button type="button" data-wall-action="reaction">◌ mood <b>4</b></button><button type="button" data-wall-action="like">♡ keep <b>9</b></button><button type="button" data-wall-action="comment">+ note <b>1</b></button><button type="button" data-wall-action="share">↗ pass on</button></div><div class="entry-notes"><p>“Looks like a memory left in a warm car.”</p></div></figure>
-          <p id="wallEmpty">Your approved edits join the end of this contact sheet.</p>
-        </div>
-        <p class="wall-status" id="wallStatus" role="status" aria-live="polite">Viewing is open. Wall actions require a profile.</p>
       </section>
 
       <section class="rarities section-shell" aria-labelledby="raritiesTitle">
