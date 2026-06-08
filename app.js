@@ -254,31 +254,6 @@ function appendLocalWallPreview() {
   wallController?.sync();
 }
 
-// Optional future auth. Public wall posting does not require login.
-// Google Console later:
-// Authorized redirect URI: https://nuaiznwlgrkqjfroefsf.supabase.co/auth/v1/callback
-// Supabase Auth URL config later:
-// Site URL: https://nmethylpyrrolinium.github.io
-// Redirect allowlist:
-// https://nmethylpyrrolinium.github.io/alam-s-dump
-// https://nmethylpyrrolinium.github.io/alam-s-dump/
-// http://localhost:4173
-// http://localhost:4173/
-async function signInWithGoogle() {
-  if (!supabaseClient) return null;
-  return supabaseClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: window.location.origin + window.location.pathname,
-    },
-  });
-}
-
-async function signOut() {
-  if (!supabaseClient) return null;
-  return supabaseClient.auth.signOut();
-}
-
 async function getAuthSession() {
   if (!supabaseClient) return null;
   const { data, error } = await supabaseClient.auth.getSession();
@@ -300,11 +275,11 @@ async function getCurrentProfile(userId) {
   return data;
 }
 
-async function signInAdmin() {
+async function signInAdmin(email, password) {
   if (!supabaseClient) throw new Error('Supabase is unavailable.');
-  return supabaseClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: window.location.origin + window.location.pathname + '#admin' },
+  return supabaseClient.auth.signInWithPassword({
+    email,
+    password,
   });
 }
 
@@ -339,16 +314,17 @@ function adminIdentity(user, profile) {
   return profile?.display_name || user?.user_metadata?.full_name || user?.email || 'Admin';
 }
 
-function renderAdminMessage(title, message, state = '') {
+function renderAdminMessage(title, message, state = '', allowLogout = false) {
   const view = document.getElementById('adminView');
   if (!view) return;
-  view.innerHTML = `<div class="admin-auth"><p class="eyebrow">Hidden control room</p><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><p class="admin-feedback" data-state="${state}"></p><button type="button" data-admin-back>Back to public wall</button></div>`;
+  const logoutButton = allowLogout ? '<button type="button" data-admin-logout>Logout</button>' : '';
+  view.innerHTML = `<div class="admin-auth"><p class="eyebrow">Hidden control room</p><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p><p class="admin-feedback" data-state="${state}"></p>${logoutButton}<button type="button" data-admin-back>Back to public wall</button></div>`;
 }
 
 function renderAdminLogin() {
   const view = document.getElementById('adminView');
   if (!view) return;
-  view.innerHTML = `<div class="admin-auth"><p class="eyebrow">Hidden control room</p><h1>Alam’s Dump Admin</h1><p>Sign in with an authorized Google account to continue.</p><p class="admin-feedback" role="status"></p><button type="button" data-admin-login>Login with Google</button><button type="button" data-admin-back>Back to public wall</button></div>`;
+  view.innerHTML = `<form class="admin-auth" data-admin-login-form><p class="eyebrow">Hidden control room</p><h1>Alam’s Dump Admin</h1><p>Sign in with your authorized admin account to continue.</p><label for="adminEmail">Email</label><input id="adminEmail" name="email" type="email" autocomplete="username" required /><label for="adminPassword">Password</label><input id="adminPassword" name="password" type="password" autocomplete="current-password" required /><p class="admin-feedback" role="status"></p><button type="submit" data-admin-login>Login</button><button type="button" data-admin-back>Back to public wall</button></form>`;
 }
 
 function adminCard(photo) {
@@ -499,8 +475,8 @@ async function renderAdminRoute() {
 
     const user = await getCurrentUser();
     const profile = user ? await getCurrentProfile(user.id) : null;
-    if (!profile) { renderAdminMessage('Profile missing', 'Profile missing. Try refreshing or contact admin.', 'error'); return; }
-    if (profile.account_type !== 'admin') { renderAdminMessage('Not authorized', 'Not authorized', 'error'); return; }
+    if (!profile) { renderAdminMessage('Profile missing', 'Profile missing. Try refreshing or contact admin.', 'error', true); return; }
+    if (profile.account_type !== 'admin') { renderAdminMessage('Not authorized', 'Not authorized', 'error', true); return; }
     activeAdminUser = user;
     renderAdminDashboard(user, profile);
     await loadAdminPhotos();
@@ -533,13 +509,27 @@ function initializeAdminAndNotices() {
   getVisitorId();
   document.addEventListener('click', async (event) => {
     if (event.target.closest('[data-admin-back]')) { window.location.hash = '#top'; return; }
-    if (event.target.closest('[data-admin-login]')) {
-      const feedback = document.querySelector('#adminView .admin-feedback');
-      try { const { error } = await signInAdmin(); if (error) throw error; } catch (error) { feedback.dataset.state = 'error'; feedback.textContent = friendlyError(error, 'Login failed.'); }
-      return;
-    }
     if (event.target.closest('[data-admin-logout]')) signOutAdmin().catch((error) => renderAdminMessage('Logout failed', friendlyError(error, 'Could not log out.'), 'error'));
     if (event.target.closest('[data-warning-cancel]')) document.getElementById('warningDialog').close();
+  });
+  document.addEventListener('submit', async (event) => {
+    const form = event.target.closest('[data-admin-login-form]');
+    if (!form) return;
+    event.preventDefault();
+    const feedback = form.querySelector('.admin-feedback');
+    const loginButton = form.querySelector('[data-admin-login]');
+    feedback.dataset.state = '';
+    feedback.textContent = 'Signing in…';
+    loginButton.disabled = true;
+    try {
+      const { error } = await signInAdmin(form.elements.email.value.trim(), form.elements.password.value);
+      if (error) throw error;
+      await renderAdminRoute();
+    } catch (error) {
+      feedback.dataset.state = 'error';
+      feedback.textContent = friendlyError(error, 'Login failed.');
+      loginButton.disabled = false;
+    }
   });
   document.getElementById('noticeDismiss')?.addEventListener('click', () => {
     const dialog = document.getElementById('noticeDialog');
@@ -1698,10 +1688,6 @@ function initialize() {
   } else {
     reveals.forEach((element) => element.classList.add('is-visible'));
   }
-
-  // Optional future auth. Public wall posting does not require login.
-  document.getElementById('googleSignIn')?.addEventListener('click', signInWithGoogle);
-  document.getElementById('authSignOut')?.addEventListener('click', signOut);
 
 }
 

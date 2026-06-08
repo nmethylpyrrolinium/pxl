@@ -9,8 +9,9 @@ assert.match(app, /rpc\('submit_guest_wall_photo',[\s\S]*p_visitor_id: getVisito
 assert.match(app, /rpc\('get_active_notices', \{ p_visitor_id: getVisitorId\(\) \}\)/, 'public page checks active notices');
 assert.match(app, /const session = await getAuthSession\(\);[\s\S]*if \(!session\)[\s\S]*renderAdminLogin\(\)/, 'admin route checks the session before showing login');
 assert.match(app, /auth\.getSession\(\)/, 'admin auth starts by fetching the current session');
-assert.match(app, /data-admin-login>Login with Google</, 'signed-out admin route offers Google login');
-assert.match(app, /redirectTo: window\.location\.origin \+ window\.location\.pathname \+ '#admin'/, 'admin OAuth returns to the admin hash route');
+assert.match(app, /data-admin-login-form[\s\S]*name=\"email\"[\s\S]*name=\"password\"[\s\S]*data-admin-login>Login</, 'signed-out admin route offers email and password login');
+assert.match(app, /auth\.signInWithPassword\(\{[\s\S]*email,[\s\S]*password,[\s\S]*\}\)/, 'admin login uses Supabase email and password auth');
+assert.doesNotMatch(app, /signInWithOAuth|provider: ['\"]google['\"]|Login with Google|Sign in with Google/, 'frontend does not offer Google OAuth');
 assert.match(app, /from\('profiles'\)\.select\('\*'\)\.eq\('id', userId\)\.maybeSingle\(\)/, 'admin authorization fetches the current user profile');
 assert.match(app, /profile\.account_type !== 'admin'/, 'admin authorization uses profiles.account_type');
 assert.match(app, /Profile missing\. Try refreshing or contact admin\./, 'missing profiles show actionable guidance');

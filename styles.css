@@ -1890,6 +1890,9 @@ body.admin-route > :not(#adminView):not(#warningDialog):not(.grain):not(.orb):no
 .admin-shell button:hover, .notice-dialog button:hover { border-color: var(--cyan); }
 .admin-auth { display: grid; gap: 1rem; width: min(520px, 100%); margin: 12vh auto; padding: 2rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--panel-strong); box-shadow: var(--shadow); }
 .admin-auth h1 { margin: 0; }
+.admin-auth label { color: var(--muted); font-size: .8rem; font-weight: 700; }
+.admin-auth input { width: 100%; padding: .75rem; }
+.admin-auth button:disabled { cursor: wait; opacity: .65; }
 .admin-auth p, .admin-feedback { color: var(--muted); }
 .admin-feedback[data-state="error"] { color: #ff9b87; }
 .admin-feedback[data-state="success"] { color: #8dffb0; }
